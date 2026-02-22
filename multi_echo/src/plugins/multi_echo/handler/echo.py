@@ -73,12 +73,26 @@ async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped
         return
 
     message_text = event.get_message().extract_plain_text().strip()
-    match = re.fullmatch(r"收2/([^/]+)/(?P<fee>\d+)(?P<onepack>一包杀)?", message_text)
-    reply_fee: int | None = None
+
+    code: str | None = None
+    fee: int | None = None
+    is_onepack: bool = False
+
+    match = re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)(?P<onepack>一包杀)?", message_text)
     if match:
         code = match.group(1).strip()
         fee = int(match.group("fee"))
         is_onepack = match.group("onepack") is not None
+    else:
+        match_new = re.fullmatch(r"拼随机三尾三包\s*([^/]+)/(?P<fee>\d+)", message_text)
+        if match_new:
+            code = match_new.group(1).strip()
+            fee = int(match_new.group("fee"))
+            is_onepack = False
+
+    reply_fee: int | None = None
+
+    if code is not None and fee is not None:
         if not code:
             return
         # 这里不再校验商品编码的格式，允许非数字的代号
