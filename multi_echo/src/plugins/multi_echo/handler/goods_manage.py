@@ -2,18 +2,22 @@ from nonebot.adapters.onebot.v11 import Bot
 from nonebot_plugin_alconna import Match
 from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from ..command import (
     set_goods,
     del_goods,
     set_onepack_goods,
     del_onepack_goods,
-    set_min_price
+    set_min_price,
+    set_rand_three_tail_three_pack_goods,
+    del_rand_three_tail_three_pack_goods
 )
 from ..model.goods import Goods
 
 
+# --------------------
+# 工具函数
+# --------------------
 def _parse_goods_entries(entries: tuple[str, ...]) -> tuple[list[tuple[str, int]], list[str]]:
     parsed: list[tuple[str, int]] = []
     invalid: list[str] = []
@@ -46,7 +50,7 @@ async def _upsert_goods(
         bot_qq: str,
         model_cls,
         items: list[tuple[str, int]],
-        is_onepack: bool,
+        goods_type: str,
         min_price: int
 ) -> None:
     for code, max_price in items:
@@ -55,7 +59,7 @@ async def _upsert_goods(
             .where(
                 model_cls.bot_qq == bot_qq,
                 model_cls.code == code,
-                model_cls.is_onepack == is_onepack
+                model_cls.goods_type == goods_type
             )
         )
         obj = result.scalar_one_or_none()
@@ -65,7 +69,7 @@ async def _upsert_goods(
                 code=code,
                 max_price=max_price,
                 min_price=min_price,
-                is_onepack=is_onepack
+                goods_type=goods_type
             ))
         else:
             obj.max_price = max_price
@@ -76,7 +80,7 @@ async def _delete_goods(
         bot_qq: str,
         model_cls,
         entries: tuple[str, ...],
-        is_onepack: bool
+        goods_type: str
 ) -> int:
     deleted = 0
     for entry in entries:
@@ -88,7 +92,7 @@ async def _delete_goods(
             .where(
                 model_cls.bot_qq == bot_qq,
                 model_cls.code == code,
-                model_cls.is_onepack == is_onepack
+                model_cls.goods_type == goods_type
             )
         )
         obj = result.scalar_one_or_none()
@@ -98,6 +102,9 @@ async def _delete_goods(
     return deleted
 
 
+# --------------------
+# 商品管理 Handler
+# --------------------
 @set_goods.handle()
 async def handle_set_goods(
         bot: Bot,
@@ -112,14 +119,9 @@ async def handle_set_goods(
         await set_goods.finish("未解析到有效的代号-费用上限")
         return
 
-    try:
-        current_min_price = await _get_current_min_price(session, str(bot.self_id))
-        await _upsert_goods(session, str(bot.self_id), Goods, parsed, False, current_min_price)
-        await session.commit()
-    except (IntegrityError, SQLAlchemyError):
-        await session.rollback()
-        await set_goods.finish("数据库错误，设置失败")
-        return
+    current_min_price = await _get_current_min_price(session, str(bot.self_id))
+    await _upsert_goods(session, str(bot.self_id), Goods, parsed, "normal", current_min_price)
+    await session.commit()
 
     if invalid:
         await set_goods.finish(f"已设置：{len(parsed)} 项，以下条目无效：{', '.join(invalid)}")
@@ -136,13 +138,9 @@ async def handle_del_goods(
     if not goods_list.available:
         return
 
-    try:
-        deleted = await _delete_goods(session, str(bot.self_id), Goods, goods_list.result, False)
-        await session.commit()
-        await del_goods.finish(f"已删除：{deleted} 项")
-    except SQLAlchemyError:
-        await session.rollback()
-        await del_goods.finish("数据库错误，删除失败")
+    deleted = await _delete_goods(session, str(bot.self_id), Goods, goods_list.result, "normal")
+    await session.commit()
+    await del_goods.finish(f"已删除：{deleted} 项")
 
 
 @set_onepack_goods.handle()
@@ -159,14 +157,9 @@ async def handle_set_onepack_goods(
         await set_onepack_goods.finish("未解析到有效的代号-费用上限")
         return
 
-    try:
-        current_min_price = await _get_current_min_price(session, str(bot.self_id))
-        await _upsert_goods(session, str(bot.self_id), Goods, parsed, True, current_min_price)
-        await session.commit()
-    except (IntegrityError, SQLAlchemyError):
-        await session.rollback()
-        await set_onepack_goods.finish("数据库错误，设置失败")
-        return
+    current_min_price = await _get_current_min_price(session, str(bot.self_id))
+    await _upsert_goods(session, str(bot.self_id), Goods, parsed, "onepack", current_min_price)
+    await session.commit()
 
     if invalid:
         await set_onepack_goods.finish(f"已设置：{len(parsed)} 项，以下条目无效：{', '.join(invalid)}")
@@ -183,13 +176,43 @@ async def handle_del_onepack_goods(
     if not goods_list.available:
         return
 
-    try:
-        deleted = await _delete_goods(session, str(bot.self_id), Goods, goods_list.result, True)
-        await session.commit()
-        await del_onepack_goods.finish(f"已删除：{deleted} 项")
-    except SQLAlchemyError:
-        await session.rollback()
-        await del_onepack_goods.finish("数据库错误，删除失败")
+    deleted = await _delete_goods(session, str(bot.self_id), Goods, goods_list.result, "onepack")
+    await session.commit()
+    await del_onepack_goods.finish(f"已删除：{deleted} 项")
+
+
+@set_rand_three_tail_three_pack_goods.handle()
+async def handle_set_rand_three_tail_three_pack_goods(
+        bot: Bot,
+        session: async_scoped_session,
+        goods_range: Match[tuple[str, ...]]
+):
+    if not goods_range.available:
+        return
+    parsed, invalid = _parse_goods_entries(goods_range.result)
+    if not parsed:
+        await set_rand_three_tail_three_pack_goods.finish("未解析到有效的代号-费用上限")
+        return
+    current_min_price = await _get_current_min_price(session, str(bot.self_id))
+    await _upsert_goods(session, str(bot.self_id), Goods, parsed, "rand_three_tail_three_pack", current_min_price)
+    await session.commit()
+    if invalid:
+        await set_rand_three_tail_three_pack_goods.finish(f"已设置：{len(parsed)} 项，以下条目无效：{', '.join(invalid)}")
+    else:
+        await set_rand_three_tail_three_pack_goods.finish(f"已设置：{len(parsed)} 项")
+
+
+@del_rand_three_tail_three_pack_goods.handle()
+async def handle_del_rand_three_tail_three_pack_goods(
+        bot: Bot,
+        session: async_scoped_session,
+        goods_range: Match[tuple[str, ...]]
+):
+    if not goods_range.available:
+        return
+    deleted = await _delete_goods(session, str(bot.self_id), Goods, goods_range.result, "rand_three_tail_three_pack")
+    await session.commit()
+    await del_rand_three_tail_three_pack_goods.finish(f"已删除：{deleted} 项")
 
 
 @set_min_price.handle()
@@ -199,15 +222,10 @@ async def handle_set_min_price(
         min_price: Match[int]
 ):
     price = min_price.result
-    try:
-        await session.execute(
-            update(Goods)
-            .where(Goods.bot_qq == str(bot.self_id))
-            .values(min_price=price)
-        )
-        await session.commit()
-        await set_min_price.finish(f"已设置费用下限：{price}")
-
-    except SQLAlchemyError:
-        await session.rollback()
-        await set_min_price.finish("数据库错误，设置失败")
+    await session.execute(
+        update(Goods)
+        .where(Goods.bot_qq == str(bot.self_id))
+        .values(min_price=price)
+    )
+    await session.commit()
+    await set_min_price.finish(f"已设置费用下限：{price}")

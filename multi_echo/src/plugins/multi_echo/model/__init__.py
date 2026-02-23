@@ -2,7 +2,8 @@ from . import (
     admin,
     blocked_user,
     delay,
-    total_switch,
     group,
     goods,
+    group_random_reply,
+    total_switch,
 )

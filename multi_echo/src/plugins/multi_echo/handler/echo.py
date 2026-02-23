@@ -1,5 +1,6 @@
 import asyncio
 import re
+import random
 
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
 from nonebot.adapters.onebot.v11.bot import Bot
@@ -8,10 +9,11 @@ from sqlalchemy import select
 
 from ..command import echo
 from ..model.delay import Delay
-from ..model.goods import Goods
+from ..model.goods import Goods, GoodsType
 from ..model.group import Group
 from ..model.total_switch import TotalSwitch
 from ..model.blocked_user import BlockedUser
+from ..model.group_random_reply import GroupRandomReply
 
 
 async def is_group_registered(bot: Bot, event: GroupMessageEvent, session: async_scoped_session) -> bool:
@@ -32,17 +34,12 @@ def _normalize_code(raw: str) -> str:
     return "".join(sorted(code))
 
 
-async def _find_goods_by_code(
-        event: GroupMessageEvent,
-        session: async_scoped_session,
-        is_onepack: bool,
-        normalized_code: str,
-) -> Goods | None:
+async def _find_goods_by_code(event, session, goods_type, normalized_code):
     result = await session.execute(
         select(Goods)
         .where(
             Goods.bot_qq == str(event.self_id),
-            Goods.is_onepack == is_onepack,
+            Goods.goods_type == goods_type.value,
         )
     )
     return next(
@@ -55,12 +52,27 @@ async def _find_goods_by_code(
     )
 
 
+async def get_group_random_reply_count(bot: Bot, group_id: str, session: async_scoped_session) -> int:
+    result = await session.execute(
+        select(GroupRandomReply)
+        .where(
+            GroupRandomReply.bot_qq == str(bot.self_id),
+            GroupRandomReply.group_id == group_id
+        )
+    )
+    obj = result.scalar_one_or_none()
+    return obj.count if obj and obj.enabled and obj.count else 0
+
+
 @echo.handle()
 async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped_session):
     # 总开关和白名单校验
     result = await session.get(TotalSwitch, 1)
     if result is None or not result.enabled or not await is_group_registered(bot, event, session):
         return
+
+    # 检查群随机回复开关（不开启则正常回复）
+    random_reply_enabled = await is_group_random_reply_enabled(bot, str(event.group_id), session)
 
     # 检查是否为被屏蔽用户
     blocked_res = await session.execute(
@@ -74,34 +86,31 @@ async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped
 
     message_text = event.get_message().extract_plain_text().strip()
 
-    code: str | None = None
-    fee: int | None = None
-    is_onepack: bool = False
+    # 三种命令正则
+    match_normal = re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)", message_text)
+    match_onepack = re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)一包杀", message_text)
+    match_rand = re.fullmatch(r"拼随机三尾三包\s*([^/]+)/(?P<fee>\d+)", message_text)
+    code, fee, goods_type = None, None, None
+    if match_normal:
+        code = match_normal.group(1).strip()
+        fee = int(match_normal.group("fee"))
+        goods_type = GoodsType.NORMAL
+    elif match_onepack:
+        code = match_onepack.group(1).strip()
+        fee = int(match_onepack.group("fee"))
+        goods_type = GoodsType.ONEPACK
+    elif match_rand:
+        code = match_rand.group(1).strip()
+        fee = int(match_rand.group("fee"))
+        goods_type = GoodsType.RAND_THREE_TAIL_THREE_PACK
 
-    match = re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)(?P<onepack>一包杀)?", message_text)
-    if match:
-        code = match.group(1).strip()
-        fee = int(match.group("fee"))
-        is_onepack = match.group("onepack") is not None
-    else:
-        match_new = re.fullmatch(r"拼随机三尾三包\s*([^/]+)/(?P<fee>\d+)", message_text)
-        if match_new:
-            code = match_new.group(1).strip()
-            fee = int(match_new.group("fee"))
-            is_onepack = False
+    reply_fee = None
 
-    reply_fee: int | None = None
-
-    if code is not None and fee is not None:
-        if not code:
-            return
-        # 这里不再校验商品编码的格式，允许非数字的代号
-
-        # 校验费用
+    if code and fee is not None and goods_type:
         normalized_code = _normalize_code(code)
         if not normalized_code:
             return
-        goods = await _find_goods_by_code(event, session, is_onepack, normalized_code)
+        goods = await _find_goods_by_code(event, session, goods_type, normalized_code)
         if goods is None:
             return
         if fee < goods.min_price:
@@ -110,6 +119,14 @@ async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped
             reply_fee = goods.max_price
         else:
             reply_fee = fee
+
+        # 仅在开关开启时，随机减去范围内的数字
+        if random_reply_enabled:
+            random_reply_count = await get_group_random_reply_count(bot, str(event.group_id), session)
+            if random_reply_count > 0:
+                # 直接用 event.message_id 作为随机种子
+                minus = random.Random(str(event.time)).randint(0, random_reply_count)
+                reply_fee = max(goods.min_price, reply_fee - minus)
 
     # 从数据库读取延迟
     res = await session.execute(
@@ -127,3 +144,15 @@ async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped
     if reply_fee is not None:
         await echo.send(MessageSegment.at(event.get_user_id()) + str(reply_fee))
         return
+
+
+async def is_group_random_reply_enabled(bot: Bot, group_id: str, session: async_scoped_session) -> bool:
+    result = await session.execute(
+        select(GroupRandomReply)
+        .where(
+            GroupRandomReply.bot_qq == str(bot.self_id),
+            GroupRandomReply.group_id == group_id
+        )
+    )
+    obj = result.scalar_one_or_none()
+    return bool(obj and obj.enabled)

@@ -49,7 +49,6 @@ del_blocked_user = on_alconna(
     block=True
 )
 
-
 # 3 商品管理
 set_goods = on_alconna(
     Alconna(
@@ -67,6 +66,30 @@ del_goods = on_alconna(
     Alconna(
         "删除压车数",
         Arg("goods_list", MultiVar(str), seps="/"),
+        meta=CommandMeta(compact=True),
+    ),
+    skip_for_unmatch=False,
+    response_self=True,
+    permission=ADMIN_OR_SUPER_ADMIN,
+    block=True
+)
+
+set_rand_three_tail_three_pack_goods = on_alconna(
+    Alconna(
+        "设置随机三尾三包压车数",
+        Arg("goods_range", MultiVar(str), seps="/"),
+        meta=CommandMeta(compact=True),
+    ),
+    skip_for_unmatch=False,
+    response_self=True,
+    permission=ADMIN_OR_SUPER_ADMIN,
+    block=True
+)
+
+del_rand_three_tail_three_pack_goods = on_alconna(
+    Alconna(
+        "删除随机三尾三包压车数",
+        Arg("goods_range", MultiVar(str), seps="/"),
         meta=CommandMeta(compact=True),
     ),
     skip_for_unmatch=False,
@@ -143,6 +166,34 @@ view_whitelist_group = on_command(
 
 set_delay = on_alconna(
     Alconna("设置群延迟", Args["args?", str], meta=CommandMeta(compact=True)),
+    response_self=True,
+    permission=ADMIN_OR_SUPER_ADMIN,
+    block=True
+)
+
+set_group_random_reply = on_alconna(
+    Alconna(
+        "设置群随机回复",
+        Args(
+            Arg("group_id", str),
+            Arg("count", int),
+            separators="#"
+        ),
+        meta=CommandMeta(compact=True),
+    ),
+    skip_for_unmatch=False,
+    response_self=True,
+    permission=ADMIN_OR_SUPER_ADMIN,
+    block=True
+)
+
+# 4. 随机回复群开关
+switch_group_random_reply = on_alconna(
+    Alconna(
+        "切换随机回复群开关",
+        Args["group_id?", str],
+        meta=CommandMeta(compact=True)
+    ),
     response_self=True,
     permission=ADMIN_OR_SUPER_ADMIN,
     block=True
