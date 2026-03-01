@@ -87,7 +87,7 @@ async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped
     message_text = event.get_message().extract_plain_text().strip()
 
     # 三种命令正则
-    match_normal = re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)", message_text)
+    match_normal = re.fullmatch(r"收\s*2\s*/([^/]+)/(?P<fee>\d+)", message_text)
     match_onepack = re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)一包杀", message_text)
     match_rand = re.fullmatch(r"拼随机三尾三包\s*([^/]+)/(?P<fee>\d+)", message_text)
     code, fee, goods_type = None, None, None

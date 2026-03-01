@@ -486,7 +486,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "nb-cli", specifier = ">=1.6.0" },
+    { name = "nb-cli", specifier = ">=1.7.2" },
     { name = "nonebot-adapter-onebot", specifier = ">=2.4.6" },
     { name = "nonebot-plugin-alconna", specifier = ">=0.60.4" },
     { name = "nonebot-plugin-orm", extras = ["sqlite", "aiosqlite"], specifier = ">=0.8.3" },
@@ -543,7 +543,7 @@ wheels = [
 
 [[package]]
 name = "nb-cli"
-version = "1.7.0"
+version = "1.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -565,9 +565,9 @@ dependencies = [
     { name = "watchfiles" },
     { name = "wcwidth" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1e/01/b0f679397c07695a6bf46fe018b5527069c9c96279f2ab2c00ec25e5b8d8/nb_cli-1.7.0.tar.gz", hash = "sha256:7acd31530070042ea5910d8b789b616d867216db34720726cc8a1587e4ed2740", size = 68859, upload-time = "2026-01-24T14:39:08.367Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/23/04/ad48cb7e7723a2a2eaaa5e06c6095b90cc47f7c412a1c013488fa1b80051/nb_cli-1.7.2.tar.gz", hash = "sha256:5af51ec911ec10e4d1c31fe186e087b0e3a97c8f29b066bfd7c0f4ad4a87ba4f", size = 69891, upload-time = "2026-02-28T17:35:38.559Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/39/20fa99c7cf693cf64c63fe3efb26fed5cf6ec9b047588e543f7804d963e5/nb_cli-1.7.0-py3-none-any.whl", hash = "sha256:032605794f9ad3423db920963f0d957edfb1a47235f1e7dcc1eae7a547d1c35d", size = 97919, upload-time = "2026-01-24T14:39:07.39Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/fb/94240e23d7eb46f1fa3b18241278e65a6ef88eaad9abdcee1d69192dce38/nb_cli-1.7.2-py3-none-any.whl", hash = "sha256:ace337a603a423ee5434cc54947c3236c1e737964893482081706948d778bd30", size = 98459, upload-time = "2026-02-28T17:35:37.169Z" },
 ]
 
 [[package]]
