@@ -15,7 +15,7 @@ async def is_admin(event: Event) -> bool:
     result = (
         select(Admin)
         .where(
-            Admin.bot_qq ==event.self_id,
+            Admin.bot_qq == event.self_id,
             Admin.admin_qq == event.get_user_id()
         )
     )

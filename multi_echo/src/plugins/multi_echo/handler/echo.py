@@ -1,6 +1,6 @@
 import asyncio
-import re
 import random
+import re
 
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
 from nonebot.adapters.onebot.v11.bot import Bot
@@ -8,12 +8,12 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 
 from ..command import echo
+from ..model.blocked_user import BlockedUser
 from ..model.delay import Delay
 from ..model.goods import Goods, GoodsType
 from ..model.group import Group
-from ..model.total_switch import TotalSwitch
-from ..model.blocked_user import BlockedUser
 from ..model.group_random_reply import GroupRandomReply
+from ..model.total_switch import TotalSwitch
 
 
 async def is_group_registered(bot: Bot, event: GroupMessageEvent, session: async_scoped_session) -> bool:

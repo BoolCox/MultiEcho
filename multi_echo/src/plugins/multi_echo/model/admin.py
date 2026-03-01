@@ -8,7 +8,7 @@ class Admin(Model):
     __tablename__ = "admins"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    bot_qq: Mapped[str] = mapped_column(String(64),comment="Bot QQ号")
+    bot_qq: Mapped[str] = mapped_column(String(64), comment="Bot QQ号")
     admin_qq: Mapped[str] = mapped_column(String(64), comment="管理员QQ号")
 
     __table_args__ = (

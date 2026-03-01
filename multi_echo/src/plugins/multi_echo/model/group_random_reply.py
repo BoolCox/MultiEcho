@@ -2,6 +2,7 @@ from nonebot_plugin_orm import Model
 from sqlalchemy import String, Integer, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
+
 class GroupRandomReply(Model):
     __tablename__ = "group_random_reply"
 

@@ -15,4 +15,3 @@ class BlockedUser(Model):
     __table_args__ = (
         UniqueConstraint("bot_qq", "user_qq", name="uq_blocked_bot_qq_user_qq"),
     )
-

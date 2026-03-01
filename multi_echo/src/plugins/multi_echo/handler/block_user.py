@@ -11,9 +11,9 @@ from ..model.blocked_user import BlockedUser
 
 @add_blocked_user.handle()
 async def handler_add_blocked_user(
-    bot: Bot,
-    session: async_scoped_session,
-    qq: Match[str],
+        bot: Bot,
+        session: async_scoped_session,
+        qq: Match[str],
 ):
     try:
         user = _valid_qq(str(qq.result))
@@ -35,9 +35,9 @@ async def handler_add_blocked_user(
 
 @del_blocked_user.handle()
 async def handler_del_blocked_user(
-    bot: Bot,
-    session: async_scoped_session,
-    qq: Match[str],
+        bot: Bot,
+        session: async_scoped_session,
+        qq: Match[str],
 ):
     try:
         user = _valid_qq(str(qq.result))

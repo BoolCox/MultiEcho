@@ -4,9 +4,9 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select, delete
 
 from ..command import view_status, view_whitelist_group, del_goods_all
+from ..model.goods import Goods
 from ..model.group import Group
 from ..model.total_switch import TotalSwitch
-from ..model.goods import Goods
 
 
 @view_status.handle()
