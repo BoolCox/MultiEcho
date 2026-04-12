@@ -1,13 +1,15 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Launcher.Services;
 
-internal sealed partial class NonebotManager(Job job)
+internal sealed partial class NonebotManager(Job job, LogService log)
 {
     private Process? _process;
     private volatile bool _started;
     private volatile string _status = "Not started";
+    private readonly LogService _log = log;
 
     public string Status
     {
@@ -21,40 +23,55 @@ internal sealed partial class NonebotManager(Job job)
 
     public string PidDisplay => _process?.Id.ToString() ?? "N/A";
 
-    public void Start(string baseDir)
+    public void Start(string dir)
     {
-        var nonebotDir = Path.Combine(baseDir, "nonebot");
-        if (!Directory.Exists(nonebotDir))
+        if (!Directory.Exists(dir))
         {
-            Console.WriteLine("[nonebot] directory not found, skipping");
+            _log.Write("nonebot", "directory not found, skipping");
             return;
         }
 
-        var venvDir = Path.Combine(nonebotDir, ".venv");
+        var venvDir = Path.Combine(dir, ".venv");
         if (!Directory.Exists(venvDir))
         {
-            Console.WriteLine("[nonebot] .venv not found, running uv sync...");
+            _log.Write("nonebot", ".venv not found, running uv sync...");
             _status = "Syncing dependencies...";
 
-            if (!RunUvSync(nonebotDir))
+            if (!RunUvSync(dir))
             {
                 _status = "Sync failed";
                 return;
             }
 
-            Console.WriteLine("[nonebot] uv sync completed");
+            _log.Write("nonebot", "uv sync completed");
+        }
+
+        var nbExe = Path.Combine(dir, ".venv", "Scripts", "nb.exe");
+        if (!File.Exists(nbExe))
+        {
+            _log.Write("nonebot", "nb.exe not found in .venv\\Scripts");
+            _status = "Failed";
+            return;
         }
 
         var psi = new ProcessStartInfo
         {
-            FileName = "powershell.exe",
-            Arguments = "-NoProfile -ExecutionPolicy Bypass -Command \"& .\\.venv\\Scripts\\activate.ps1; .\\.venv\\Scripts\\nb.exe run --reload\"",
-            WorkingDirectory = nonebotDir,
+            FileName = nbExe,
+            Arguments = "run --reload",
+            WorkingDirectory = dir,
             UseShellExecute = false,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardInputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             RedirectStandardOutput = true,
-            RedirectStandardError = true,
             RedirectStandardInput = true,
-            CreateNoWindow = true
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            Environment =
+            {
+                ["PYTHONUTF8"] = "1",
+                ["PYTHONIOENCODING"] = "utf-8"
+            }
         };
 
         try
@@ -69,7 +86,7 @@ internal sealed partial class NonebotManager(Job job)
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
             _status = "Starting...";
-            Console.WriteLine($"[nonebot] started (PID {proc.Id})");
+            _log.Write("nonebot", $"started (PID {proc.Id})");
 
             _ = Task.Run(async () =>
             {
@@ -81,7 +98,7 @@ internal sealed partial class NonebotManager(Job job)
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[nonebot] failed: {ex.Message}");
+            _log.Write("nonebot", $"failed: {ex.Message}");
             _status = "Failed";
         }
     }
@@ -105,12 +122,12 @@ internal sealed partial class NonebotManager(Job job)
             proc.OutputDataReceived += (_, e) =>
             {
                 if (!string.IsNullOrWhiteSpace(e.Data))
-                    Console.WriteLine($"[nonebot/uv] {e.Data}");
+                    _log.Write("nonebot", $"[uv] {e.Data}");
             };
             proc.ErrorDataReceived += (_, e) =>
             {
                 if (!string.IsNullOrWhiteSpace(e.Data))
-                    Console.WriteLine($"[nonebot/uv] {e.Data}");
+                    _log.Write("nonebot", $"[uv] {e.Data}");
             };
 
             proc.Start();
@@ -122,17 +139,19 @@ internal sealed partial class NonebotManager(Job job)
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[nonebot] uv sync failed: {ex.Message}");
+            _log.Write("nonebot", $"uv 进程处理错误: {ex.Message}");
             return false;
         }
     }
 
     private void HandleOutput(string? line)
     {
-        if (string.IsNullOrWhiteSpace(line) || _started)
+        if (string.IsNullOrWhiteSpace(line))
             return;
 
-        if (StartupRegex().IsMatch(line))
+        _log.Write("nonebot", line);
+
+        if (!_started && StartupRegex().IsMatch(line))
         {
             _started = true;
             _status = "Running";

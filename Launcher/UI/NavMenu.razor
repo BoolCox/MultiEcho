@@ -1,0 +1,39 @@
+﻿@using RazorConsole.Components
+@using Spectre.Console
+@inject NavigationManager Nav
+@inherits LayoutComponentBase
+
+<Figlet Content="App" />
+<Panel Border="BoxBorder.Ascii" Expand="true">
+    <Grid Columns="2" Expand="true">
+        <Padder Padding="@(new(1, 1, 1, 1))">
+            <Select TItem="string"
+                    Options="@(new[] { "主页", "Nonebot日志", "Napcat日志", "杂项" })"
+                    Value="@_selected"
+                    ValueChanged="@OnTabChanged" />
+        </Padder>
+        @Body
+    </Grid>
+</Panel>
+
+@code {
+    private string _selected = "主页";
+
+    private void OnTabChanged(string value)
+    {
+        _selected = value;
+
+        var target = value switch
+        {
+            "主页" => "/",
+            "Nonebot日志" => "/nonebot",
+            "Napcat日志" => "/napcat",
+            _ => "/"
+        };
+
+        if (!string.Equals(Nav.ToBaseRelativePath(Nav.Uri), target.TrimStart('/'), StringComparison.OrdinalIgnoreCase))
+        {
+            Nav.NavigateTo(target);
+        }
+    }
+}

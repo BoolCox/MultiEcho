@@ -1,0 +1,51 @@
+﻿@page "/"
+@using RazorConsole.Components
+@using Spectre.Console
+@inject Launcher.Services.NonebotManager Nonebot
+@inject Launcher.Services.NapCatManager Napcat
+@implements IDisposable
+
+
+<Panel Border="BoxBorder.Square" Expand="true">
+    <Markup Content="@($"Nonebot状态：{Nonebot.Status} (PID: {Nonebot.PidDisplay})")" />
+    <Newline />
+    <Markup Content="@($"Napcat实例数：{Napcat.Instances.Count}")" />
+
+    @foreach (var inst in Napcat.Instances)
+    {
+        <Newline />
+        <Markup Content="@($"- {inst.Name}: {inst.Status} (PID: {inst.PidDisplay}) WebUI: {inst.WebUiUrl ?? "waiting..."}")" />
+    }
+</Panel>
+
+@code {
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+
+    protected override void OnInitialized()
+    {
+        _cts = new CancellationTokenSource();
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (_timer is not null && await _timer.WaitForNextTickAsync(_cts.Token))
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        });
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _timer?.Dispose();
+        _cts?.Dispose();
+    }
+}

@@ -1,0 +1,23 @@
+@namespace MultipageApp.Components
+@using Microsoft.AspNetCore.Components.Routing
+@using RazorConsole.Components
+@using Spectre.Console
+@using Launcher.UI
+
+@inject NavigationManager Nav
+
+<Panel Title="@($"当前工作目录：{_currentPath}")" Border="BoxBorder.Ascii">
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="routeData" DefaultLayout="typeof(NavMenu)"/>
+        </Found>
+    </Router>
+</Panel>
+
+
+@code {
+    private string _currentPath = string.Empty;
+
+    protected override void OnInitialized()
+        => _currentPath = Directory.GetCurrentDirectory();
+}

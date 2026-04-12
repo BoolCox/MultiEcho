@@ -1,0 +1,49 @@
+﻿@page "/napcat"
+@using RazorConsole.Components
+@using Spectre.Console
+@inject Launcher.Services.LogService LogService
+@implements IDisposable
+
+<Panel Border="BoxBorder.Square" Expand="true">
+    <Scrollable Scrollbar="new()" Items="@Lines" PageSize="6">
+        @foreach (var item in context)
+        {
+            <Markup Content="@item" />
+        }
+    </Scrollable>
+</Panel>
+
+@code {
+    private readonly List<string> Lines = [];
+
+    protected override void OnInitialized()
+    {
+        foreach (var line in LogService.Snapshot().Where(x => x.Source == "napcat" || x.Source == "app"))
+            Lines.Add(Format(line));
+
+        LogService.LineReceived += OnLine;
+    }
+
+    private void OnLine(Launcher.Services.LogLine line)
+    {
+        if (line.Source != "napcat" && line.Source != "app")
+            return;
+
+        _ = InvokeAsync(() =>
+        {
+            Lines.Add(Format(line));
+            if (Lines.Count > 2000)
+                Lines.RemoveRange(0, Lines.Count - 2000);
+
+            StateHasChanged();
+        });
+    }
+
+    private static string Format(Launcher.Services.LogLine line)
+        => $"[{line.Source}] {line.Message}";
+
+    public void Dispose()
+    {
+        LogService.LineReceived -= OnLine;
+    }
+}

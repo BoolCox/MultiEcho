@@ -1,14 +1,16 @@
+using Launcher.Models;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
-using Launcher.Models;
 
 namespace Launcher.Services;
 
-internal sealed partial class NapCatManager(Job job)
+internal sealed partial class NapCatManager(Job job, LogService log)
 {
     private readonly List<NapCatInstance> _instances = [];
     private readonly ConcurrentQueue<string> _pendingUrls = new();
+    private readonly LogService _log = log;
 
     public IReadOnlyList<NapCatInstance> Instances => _instances;
 
@@ -25,7 +27,16 @@ internal sealed partial class NapCatManager(Job job)
     {
         while (_pendingUrls.TryDequeue(out var url))
         {
-            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                _log.Write("napcat", $"opened WebUI: {url}");
+            }
+            catch (Exception ex)
+            {
+                _log.Write("napcat", $"failed to open browser {url}: {ex.Message}");
+            }
+
             Thread.Sleep(200);
         }
     }
@@ -37,7 +48,7 @@ internal sealed partial class NapCatManager(Job job)
 
         if (!File.Exists(launcher))
         {
-            Console.WriteLine($"[{name}] launcher.bat not found");
+            _log.Write("napcat", $"[{name}] launcher.bat not found");
             return null;
         }
 
@@ -47,6 +58,8 @@ internal sealed partial class NapCatManager(Job job)
             Arguments = $"/c \"\"{launcher}\"\"",
             WorkingDirectory = napcatDir,
             UseShellExecute = false,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
@@ -65,12 +78,12 @@ internal sealed partial class NapCatManager(Job job)
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
             instance.Process = proc;
-            Console.WriteLine($"[{name}] started (PID {proc.Id})");
+            _log.Write("napcat", $"[{name}] started (PID {proc.Id})");
             return instance;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[{name}] failed: {ex.Message}");
+            _log.Write("napcat", $"[{name}] failed: {ex.Message}");
             return null;
         }
     }
@@ -83,9 +96,14 @@ internal sealed partial class NapCatManager(Job job)
             return;
 
         var cleaned = s_ansiEscapeRegex.Replace(line, "");
+        _log.Write("napcat", $"[{inst.Name}] {cleaned}");
+
         var match = WebUiRegex().Match(cleaned);
         if (match.Success && inst.TrySetWebUiUrl(match.Groups[1].Value))
+        {
             _pendingUrls.Enqueue(inst.WebUiUrl!);
+            _log.Write("napcat", $"[{inst.Name}] WebUI ready: {inst.WebUiUrl}");
+        }
     }
 
     [GeneratedRegex(@"WebUi User Panel Url:\s*(https?://127\.0\.0\.1:\d+[^\s]*)", RegexOptions.IgnoreCase)]
