@@ -3,12 +3,12 @@ using Microsoft.Extensions.Hosting;
 
 namespace Launcher.Services;
 
-internal sealed class LauncherHostedService(
+internal sealed partial class LauncherHostedService(
     NapCatManager napcat,
     NonebotManager nonebot,
     LogService log) : BackgroundService
 {
-    private static readonly Regex s_napcatFolderRegex = new("^napcat\\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex s_napcatFolderRegex = FolderRegex();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -78,4 +78,6 @@ internal sealed class LauncherHostedService(
         }
     }
 
+    [GeneratedRegex("^napcat\\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled, "zh-CN")]
+    private static partial Regex FolderRegex();
 }

@@ -1,7 +1,7 @@
 from nonebot.adapters.onebot.v11 import Bot
 from nonebot_plugin_alconna import Match
 from nonebot_plugin_orm import async_scoped_session
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from ..command import (
     set_goods,
@@ -13,6 +13,7 @@ from ..command import (
     del_rand_three_tail_three_pack_goods
 )
 from ..model.goods import Goods
+from ..model.group_fee_rule import GroupFeeRule
 
 
 # --------------------
@@ -219,13 +220,28 @@ async def handle_del_rand_three_tail_three_pack_goods(
 async def handle_set_min_price(
         bot: Bot,
         session: async_scoped_session,
+        group: Match[int],
         min_price: Match[int]
 ):
+    group_id = str(group.result)
     price = min_price.result
-    await session.execute(
-        update(Goods)
-        .where(Goods.bot_qq == str(bot.self_id))
-        .values(min_price=price)
+    result = await session.execute(
+        select(GroupFeeRule).where(
+            GroupFeeRule.bot_qq == str(bot.self_id),
+            GroupFeeRule.group_id == group_id,
+        ).limit(1)
     )
+    rule = result.scalar_one_or_none()
+    if rule is None:
+        session.add(
+            GroupFeeRule(
+                bot_qq=str(bot.self_id),
+                group_id=group_id,
+                min_price=price,
+            )
+        )
+    else:
+        rule.min_price = price
+
     await session.commit()
-    await set_min_price.finish(f"已设置费用下限：{price}")
+    await set_min_price.finish(f"已设置该群费用下限：{price}")

@@ -24,7 +24,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)'=='Release'">
-		<PublishAot>true</PublishAot>
+		<PublishAot>false</PublishAot>
 		<SelfContained>true</SelfContained>
 		<PublishSingleFile>true</PublishSingleFile>
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -56,7 +56,7 @@
 	<!-- 下载并解压 NapCat 到 build/napcat1 -->
 	<Target Name="DownloadNapCat" AfterTargets="Publish" DependsOnTargets="CopyNonebot">
 		<PropertyGroup>
-			<NapcatVersion>v4.17.55</NapcatVersion>
+			<NapcatVersion>v4.18.0</NapcatVersion>
 			<NapcatUrl>https://github.com/NapNeko/NapCatQQ/releases/download/$(NapcatVersion)/NapCat.Shell.zip</NapcatUrl>
 			<NapcatZip>$(OutputDir)NapCat.zip</NapcatZip>
 			<NapcatExtractDir>$(OutputDir)napcat1</NapcatExtractDir>

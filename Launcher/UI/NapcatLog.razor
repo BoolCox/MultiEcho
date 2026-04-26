@@ -4,8 +4,8 @@
 @inject Launcher.Services.LogService LogService
 @implements IDisposable
 
-<Panel Border="BoxBorder.Square" Expand="true">
-    <Scrollable Scrollbar="new()" Items="@Lines" PageSize="6">
+<Panel Border="BoxBorder.Square">
+    <Scrollable Scrollbar="new()" Items="@Lines" PageSize="12">
         @foreach (var item in context)
         {
             <Markup Content="@item" />
@@ -38,7 +38,7 @@
             StateHasChanged();
         });
     }
-
+     
     private static string Format(Launcher.Services.LogLine line)
         => $"[{line.Source}] {line.Message}";
 

@@ -9,7 +9,7 @@ Console.Title = "Candy Launcher";
 var builder = Host.CreateApplicationBuilder(args);
 builder.UseRazorConsole<App>();
 
-// 注册日志服务
+// 注册服务
 builder.Services.AddSingleton<LogService>();
 builder.Services.AddSingleton<Job>();
 builder.Services.AddSingleton<NapCatManager>();

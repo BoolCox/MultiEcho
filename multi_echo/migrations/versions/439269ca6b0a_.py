@@ -1,8 +1,8 @@
 """empty message
 
-迁移 ID: b8c38aee089c
+迁移 ID: 439269ca6b0a
 父迁移: 
-创建时间: 2026-04-11 02:44:58.141723
+创建时间: 2026-04-20 21:26:15.119892
 
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = 'b8c38aee089c'
+revision: str = '439269ca6b0a'
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -68,6 +68,18 @@ def upgrade(name: str = "") -> None:
     sa.UniqueConstraint('bot_qq', 'code', 'goods_type', name='uq_goods_bot_qq_code_type'),
     info={'bind_key': 'multi_echo'}
     )
+    op.create_table('group_fee_rule',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('bot_qq', sa.String(length=64), nullable=False, comment='Bot QQ账号'),
+    sa.Column('group_id', sa.String(length=64), nullable=False, comment='QQ群号'),
+    sa.Column('min_price', sa.Integer(), nullable=False),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_group_fee_rule')),
+    info={'bind_key': 'multi_echo'}
+    )
+    with op.batch_alter_table('group_fee_rule', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_group_fee_rule_bot_qq'), ['bot_qq'], unique=False)
+        batch_op.create_index(batch_op.f('ix_group_fee_rule_group_id'), ['group_id'], unique=False)
+
     op.create_table('group_random_reply',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('bot_qq', sa.String(length=64), nullable=False),
@@ -102,6 +114,11 @@ def downgrade(name: str = "") -> None:
         batch_op.drop_index(batch_op.f('ix_group_random_reply_bot_qq'))
 
     op.drop_table('group_random_reply')
+    with op.batch_alter_table('group_fee_rule', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_group_fee_rule_group_id'))
+        batch_op.drop_index(batch_op.f('ix_group_fee_rule_bot_qq'))
+
+    op.drop_table('group_fee_rule')
     op.drop_table('goods')
     op.drop_table('follow_switches')
     with op.batch_alter_table('delays', schema=None) as batch_op:

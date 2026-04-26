@@ -18,7 +18,17 @@ async def handler_add_group(bot: Bot, session: async_scoped_session, qq: Match[s
         return
 
     try:
-        session.add(Group(bot_qq=bot.self_id, platform_id=group))
+        result = await session.execute(
+            select(Group).where(
+                Group.bot_qq == bot.self_id,
+                Group.platform_id == group,
+            )
+        )
+        obj = result.scalar_one_or_none()
+        if obj is None:
+            session.add(Group(bot_qq=bot.self_id, platform_id=group, enabled=True))
+        else:
+            obj.enabled = True
         await session.commit()
         await add_group.finish(f"已添加群：{group}")
 
@@ -46,7 +56,7 @@ async def handler_del_group(bot: Bot, session: async_scoped_session, qq: Match[s
         obj = result.scalar_one_or_none()
 
         if obj is not None:
-            await session.delete(obj)
+            obj.enabled = False
             await session.commit()
 
         await del_group.finish("已取消设置该群")

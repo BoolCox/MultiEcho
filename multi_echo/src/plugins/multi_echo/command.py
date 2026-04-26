@@ -20,7 +20,7 @@ del_admin = on_alconna(
     block=True
 )
 
-# 2. 白名单管理
+# 2. 群管理
 add_group = on_alconna(
     Alconna("添加群", Args["qq?", str], meta=CommandMeta(compact=True)),
     response_self=True,
@@ -125,7 +125,11 @@ del_onepack_goods = on_alconna(
 set_min_price = on_alconna(
     Alconna(
         "设置下限",
-        Args["min_price", int],
+        Args(
+            Arg("group", int),
+            Arg("min_price", int),
+            separators="#"
+        ),
         meta=CommandMeta(compact=True)
     ),
     skip_for_unmatch=False,
@@ -158,8 +162,9 @@ view_status = on_command(
 )
 
 view_whitelist_group = on_command(
-    "查看当前添加群",
+    "查看群列表",
     rule=to_me(),
+    aliases={"查看当前添加群"},
     permission=ADMIN_OR_SUPER_ADMIN,
     block=True
 )
@@ -180,6 +185,32 @@ set_group_random_reply = on_alconna(
             separators="#"
         ),
         meta=CommandMeta(compact=True),
+    ),
+    skip_for_unmatch=False,
+    response_self=True,
+    permission=ADMIN_OR_SUPER_ADMIN,
+    block=True
+)
+
+open_random_prefix = on_alconna(
+    Alconna(
+        "开启群压车符号",
+        Args["group", str],
+        meta=CommandMeta(compact=True),
+        separators="#"
+    ),
+    skip_for_unmatch=False,
+    response_self=True,
+    permission=ADMIN_OR_SUPER_ADMIN,
+    block=True
+)
+
+disable_random_prefix = on_alconna(
+    Alconna(
+        "关闭群压车符号",
+        Args["group", str],
+        meta=CommandMeta(compact=True),
+        separators="#"
     ),
     skip_for_unmatch=False,
     response_self=True,
