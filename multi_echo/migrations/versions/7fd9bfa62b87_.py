@@ -1,8 +1,8 @@
 """empty message
 
-迁移 ID: 439269ca6b0a
+迁移 ID: 7fd9bfa62b87
 父迁移: 
-创建时间: 2026-04-20 21:26:15.119892
+创建时间: 2026-05-21 22:25:27.689775
 
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '439269ca6b0a'
+revision: str = '7fd9bfa62b87'
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -37,6 +37,12 @@ def upgrade(name: str = "") -> None:
     sa.Column('user_qq', sa.String(length=64), nullable=False, comment='被屏蔽用户QQ号'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_blocked_users')),
     sa.UniqueConstraint('bot_qq', 'user_qq', name='uq_blocked_bot_qq_user_qq'),
+    info={'bind_key': 'multi_echo'}
+    )
+    op.create_table('config',
+    sa.Column('key', sa.String(length=50), nullable=False),
+    sa.Column('value', sa.String(length=200), nullable=False),
+    sa.PrimaryKeyConstraint('key', name=op.f('pk_config')),
     info={'bind_key': 'multi_echo'}
     )
     op.create_table('delays',
@@ -84,7 +90,7 @@ def upgrade(name: str = "") -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('bot_qq', sa.String(length=64), nullable=False),
     sa.Column('group_id', sa.String(length=64), nullable=False),
-    sa.Column('count', sa.Integer(), nullable=False),
+    sa.Column('random_reduce_limit', sa.Integer(), nullable=False),
     sa.Column('enabled', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_group_random_reply')),
     info={'bind_key': 'multi_echo'}
@@ -97,6 +103,8 @@ def upgrade(name: str = "") -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('bot_qq', sa.String(length=64), nullable=False, comment='Bot QQ账号'),
     sa.Column('platform_id', sa.String(length=64), nullable=False, comment='QQ群号'),
+    sa.Column('enabled', sa.Boolean(), nullable=False, comment='是否启用'),
+    sa.Column('random_prefix_enabled', sa.Boolean(), nullable=False, comment='是否开启群随机前缀'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_groups')),
     sa.UniqueConstraint('bot_qq', 'platform_id', name='uq_group_bot_qq_platform_id'),
     info={'bind_key': 'multi_echo'}
@@ -125,6 +133,7 @@ def downgrade(name: str = "") -> None:
         batch_op.drop_index(batch_op.f('ix_delays_bot_qq'))
 
     op.drop_table('delays')
+    op.drop_table('config')
     op.drop_table('blocked_users')
     op.drop_table('admins')
     # ### end Alembic commands ###

@@ -10,6 +10,7 @@ dependencies = [
     "nonebot-plugin-orm[aiosqlite]>=0.8.3",
     "nonebot-plugin-alconna>=0.62.0",
     "nb-cli>=1.7.4",
+    "pyrefly>=0.60.0",
 ]
 
 [project.optional-dependencies]

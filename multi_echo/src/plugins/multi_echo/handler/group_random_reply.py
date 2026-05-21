@@ -13,30 +13,30 @@ async def handle_set_group_random_reply(
         bot: Bot,
         session: async_scoped_session,
         group_id: Match[str],
-        count: Match[int]
+        random_reduce_limit: Match[int]
 ):
-    if not group_id.available or not count.available:
+    if not group_id.available or not random_reduce_limit.available:
         await set_group_random_reply.finish("参数错误，请输入正确的QQ群号和数字")
         return
     try:
         result = await session.execute(
             select(GroupRandomReply)
             .where(
-                GroupRandomReply.bot_qq == str(bot.self_id),
+                GroupRandomReply.bot_qq == bot.self_id,
                 GroupRandomReply.group_id == group_id.result
             )
         )
         obj = result.scalar_one_or_none()
         if obj is None:
             session.add(GroupRandomReply(
-                bot_qq=str(bot.self_id),
+                bot_qq=bot.self_id,
                 group_id=group_id.result,
-                count=count.result
+                random_reduce_limit=random_reduce_limit.result
             ))
         else:
-            obj.count = count.result
+            obj.random_reduce_limit = random_reduce_limit.result
         await session.commit()
-        await set_group_random_reply.finish(f"已设置群 {group_id.result} 随机回复范围为：{count.result}")
+        await set_group_random_reply.finish(f"已设置群 {group_id.result} 随机减值上限为：{random_reduce_limit.result}")
     except SQLAlchemyError:
         await session.rollback()
         await set_group_random_reply.finish("数据库错误，设置失败")
@@ -55,14 +55,14 @@ async def handle_switch_group_random_reply(
         result = await session.execute(
             select(GroupRandomReply)
             .where(
-                GroupRandomReply.bot_qq == str(bot.self_id),
+                GroupRandomReply.bot_qq == bot.self_id,
                 GroupRandomReply.group_id == group_id.result
             )
         )
         obj = result.scalar_one_or_none()
         if obj is None:
             session.add(GroupRandomReply(
-                bot_qq=str(bot.self_id),
+                bot_qq=bot.self_id,
                 group_id=group_id.result,
                 enabled=True
             ))

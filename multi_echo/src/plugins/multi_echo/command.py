@@ -181,7 +181,7 @@ set_group_random_reply = on_alconna(
         "设置群随机回复",
         Args(
             Arg("group_id", str),
-            Arg("count", int),
+            Arg("random_reduce_limit", int),
             separators="#"
         ),
         meta=CommandMeta(compact=True),

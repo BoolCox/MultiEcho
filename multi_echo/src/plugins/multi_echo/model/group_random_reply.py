@@ -9,5 +9,5 @@ class GroupRandomReply(Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bot_qq: Mapped[str] = mapped_column(String(64), index=True)
     group_id: Mapped[str] = mapped_column(String(64), index=True)
-    count: Mapped[int] = mapped_column(Integer, default=0)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=False)  # 新增，默认关闭
+    random_reduce_limit: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)  # 默认关闭

@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..command import echo
+from ..dependencies.profiler import AsyncProfiler
+from ..exceptions import ReplyFeeExc
 from ..model.blocked_user import BlockedUser
 from ..model.delay import Delay
 from ..model.goods import Goods, GoodsType
@@ -18,16 +20,50 @@ from ..model.group_random_reply import GroupRandomReply
 from ..model.total_switch import TotalSwitch
 
 
-async def is_group_registered(bot: Bot, event: GroupMessageEvent, session: async_scoped_session) -> bool:
-    result = await session.execute(
-        select(Group)
-        .where(
-            Group.bot_qq == bot.self_id,
-            Group.platform_id == str(event.group_id),
-            Group.enabled.is_(True),
+@echo.handle()
+async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped_session):
+    profiler = AsyncProfiler()
+
+    try:
+        profiler.mark("start")
+
+        parsed = _parse_and_validate_echo_command(event)
+        profiler.mark("_parse")
+
+        # 优化2：获取群实例且验证是否可用，一次查表
+        group = await _ensure_echo_available(bot, event, session)
+        profiler.mark("_ensure_echo_available")
+
+        # 检查是否为被屏蔽用户
+        await _ensure_not_blocked_user(bot, event, session)
+        profiler.mark("_ensure_not_blocked_user")
+
+        reply_fee = await _calculate_reply_fee(
+            bot=bot,
+            event=event,
+            session=session,
+            parsed=parsed
         )
+        profiler.mark("_calculate_reply_fee")
+
+        # 应用延迟
+        await _apply_delay(bot, event, session)
+        profiler.mark("_apply_delay")
+
+        # 设置前缀
+        prefix = _build_random_prefix(group)
+        profiler.mark("_build_random_prefix")
+
+    except (SQLAlchemyError, ReplyFeeExc):
+        await session.rollback()
+        return
+
+    await echo.send(
+        MessageSegment.at(event.get_user_id())
+        + f"{prefix}{reply_fee}"
     )
-    return result.scalar_one_or_none() is not None
+    profiler.mark("send")
+    profiler.report()
 
 
 def _normalize_code(raw: str) -> str:
@@ -43,162 +79,182 @@ async def _find_goods_by_code(event, session, goods_type, normalized_code) -> Go
         .where(
             Goods.bot_qq == str(event.self_id),
             Goods.goods_type == goods_type.value,
+            Goods.code == normalized_code,
         )
+        .limit(1)
     )
-    return next(
-        (
-            item
-            for item in result.scalars().all()
-            if _normalize_code(item.code) == normalized_code
-        ),
-        None,
-    )
+    return result.scalar_one_or_none()
 
 
 async def _get_effective_min_price(bot: Bot, group_id: str, session: async_scoped_session) -> int:
     result = await session.execute(
         select(GroupFeeRule.min_price)
         .where(
-            GroupFeeRule.bot_qq == str(bot.self_id),
+            GroupFeeRule.bot_qq == bot.self_id,
             GroupFeeRule.group_id == group_id,
         )
         .limit(1)
     )
     group_min_price = result.scalar_one_or_none()
     if group_min_price is not None:
-        return int(group_min_price)
+        return group_min_price
     else:
         return 0
 
 
-async def get_group_random_reply_count(bot: Bot, group_id: str, session: async_scoped_session) -> int:
+async def get_group_random_reply_limit(bot: Bot, group_id: str, session: async_scoped_session) -> int:
     result = await session.execute(
         select(GroupRandomReply)
         .where(
-            GroupRandomReply.bot_qq == str(bot.self_id),
+            GroupRandomReply.bot_qq == bot.self_id,
             GroupRandomReply.group_id == group_id
         )
     )
     obj = result.scalar_one_or_none()
-    return obj.count if obj and obj.enabled and obj.count else 0
+    return obj.random_reduce_limit if obj and obj.enabled and obj.random_reduce_limit else 0
 
 
-async def is_group_random_prefix_enabled(bot: Bot, group_id: str, session: async_scoped_session) -> bool:
-    """检查群是否开启随机前缀功能"""
+async def _ensure_echo_available(
+        bot: Bot,
+        event: GroupMessageEvent,
+        session: async_scoped_session
+) -> Group:
+    """确保插件/群组对该 bot 的 echo 功能可用；不可用时抛出 ReplyFeeExc；返回 Group 对象实例"""
+    total_switch = await session.get(TotalSwitch, 1)
+    if total_switch is None or not total_switch.enabled:
+        raise ReplyFeeExc("功能未启用")
+
     result = await session.execute(
-        select(Group)
-        .where(
-            Group.bot_qq == str(bot.self_id),
-            Group.platform_id == group_id,
+        select(Group).where(
+            Group.bot_qq == bot.self_id,
+            Group.platform_id == str(event.group_id),
+            Group.enabled.is_(True),
         )
     )
-    obj = result.scalar_one_or_none()
-    return bool(obj and obj.random_prefix_enabled)
+
+    group = result.scalar_one_or_none()
+    if not group:
+        raise ReplyFeeExc("群未启用")
+
+    return group
 
 
-@echo.handle()
-async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped_session):
-    # 总开关和群启用状态校验
-    result = await session.get(TotalSwitch, 1)
-    if result is None or not result.enabled or not await is_group_registered(bot, event, session):
-        return
-
-    # 检查群随机回复开关（不开启则正常回复）
-    random_reply_enabled = await is_group_random_reply_enabled(bot, str(event.group_id), session)
-
-    # 检查是否为被屏蔽用户
-    blocked_res = await session.execute(
+async def _ensure_not_blocked_user(
+        bot: Bot,
+        event: GroupMessageEvent,
+        session: async_scoped_session
+):
+    """若用户被屏蔽则抛出 ReplyFeeExc，否则什么也不做"""
+    result = await session.execute(
         select(BlockedUser).where(
             BlockedUser.bot_qq == bot.self_id,
             BlockedUser.user_qq == event.get_user_id(),
         )
     )
-    if blocked_res.scalar_one_or_none() is not None:
-        return
 
-    message_text = event.get_message().extract_plain_text().strip()
+    if result.scalar_one_or_none() is not None:
+        raise ReplyFeeExc("用户被屏蔽")
 
-    # 三种命令正则
-    match_normal = re.fullmatch(r"收\s*2\s*/([^/]+)/(?P<fee>\d+)", message_text)
-    match_onepack = re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)一包杀", message_text)
-    match_rand = re.fullmatch(r"拼随机三尾三包\s*([^/]+)/(?P<fee>\d+)", message_text)
-    code, fee, goods_type = None, None, None
-    if match_normal:
-        code = match_normal.group(1).strip()
-        fee = int(match_normal.group("fee"))
-        goods_type = GoodsType.NORMAL
-    elif match_onepack:
-        code = match_onepack.group(1).strip()
-        fee = int(match_onepack.group("fee"))
-        goods_type = GoodsType.ONEPACK
-    elif match_rand:
-        code = match_rand.group(1).strip()
-        fee = int(match_rand.group("fee"))
-        goods_type = GoodsType.RAND_THREE_TAIL_THREE_PACK
 
-    reply_fee = None
-
-    if code and fee is not None and goods_type:
-        normalized_code = _normalize_code(code)
-        if not normalized_code:
-            return
-        goods = await _find_goods_by_code(event, session, goods_type, normalized_code)
-        if goods is None:
-            return
-        effective_min_price = await _get_effective_min_price(bot, str(event.group_id), session)
-        if fee < effective_min_price:
-            return
-        if fee > goods.max_price:
-            reply_fee = goods.max_price
-        else:
-            reply_fee = fee
-
-        # 仅在开关开启时，随机减去范围内的数字
-        if random_reply_enabled:
-            random_reply_count = await get_group_random_reply_count(bot, str(event.group_id), session)
-            if random_reply_count > 0:
-                # 直接用 event.message_id 作为随机种子
-                minus = random.Random(str(event.time)).randint(0, random_reply_count)
-                reply_fee = max(effective_min_price, reply_fee - minus)
-
-    # 从数据库读取延迟
-    res = await session.execute(
-        select(Delay)
-        .where(
+async def _apply_delay(
+        bot: Bot,
+        event: GroupMessageEvent,
+        session: async_scoped_session
+):
+    result = await session.execute(
+        select(Delay).where(
             Delay.group_id == str(event.group_id),
             Delay.bot_qq == bot.self_id
         )
     )
-    delay_obj = res.scalar_one_or_none()
+
+    delay_obj = result.scalar_one_or_none()
+
     delay_ms = delay_obj.delay if delay_obj else 0
-    if delay_ms and delay_ms > 0:
+
+    if delay_ms > 0:
         await asyncio.sleep(delay_ms / 1000)
 
-    if reply_fee is not None:
-        # 如果群开启了随机前缀，从常见符号中随机挑一个并加在回复前面
-        prefix = ""
-        try:
-            if await is_group_random_prefix_enabled(bot, str(event.group_id), session):
-                symbols = [
-                    "·", "•", "☆", "★", "✦", "⚡", "♪", "♡", "❤", "※",
-                    "✪", "➤", "—", "~", "▪", "▫", "✿", "❀", "☘", "✧"
-                ]
-                prefix = random.choice(symbols)
-        except SQLAlchemyError:
-            # 如果检查前缀或随机选择出错，回退为无前缀，避免影响主逻辑
-            prefix = ""
 
-        await echo.send(MessageSegment.at(event.get_user_id()) + (prefix + str(reply_fee)))
-        return
+def _parse_and_validate_echo_command(event: GroupMessageEvent) -> tuple[str, int, GoodsType]:
+    text = event.get_message().extract_plain_text().strip()
+
+    patterns = [
+        (re.fullmatch(r"收\s*2\s*/([^/]+)/(?P<fee>\d+)", text), GoodsType.NORMAL),
+        (re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)一包杀", text), GoodsType.ONEPACK),
+        (re.fullmatch(r"拼随机三尾三包\s*([^/]+)/(?P<fee>\d+)", text), GoodsType.RAND_THREE_TAIL_THREE_PACK),
+    ]
+
+    for match, goods_type in patterns:
+        if match:
+            return (
+                match.group(1).strip(),
+                int(match.group("fee")),
+                goods_type
+            )
+
+    # 不符合命令格式，通过抛出 ReplyFeeExc 让上层统一处理（handler_echo 捕获）
+    raise ReplyFeeExc("命令格式不匹配")
 
 
-async def is_group_random_reply_enabled(bot: Bot, group_id: str, session: async_scoped_session) -> bool:
-    result = await session.execute(
-        select(GroupRandomReply)
-        .where(
-            GroupRandomReply.bot_qq == str(bot.self_id),
-            GroupRandomReply.group_id == group_id
-        )
+async def _calculate_reply_fee(
+        bot: Bot,
+        event: GroupMessageEvent,
+        session: async_scoped_session,
+        parsed: tuple[str, int, GoodsType],
+) -> int:
+    code, fee, goods_type = parsed
+    normalized_code = _normalize_code(code)
+    if not normalized_code:
+        # 无效 code
+        raise ReplyFeeExc("无效的商品编码")
+
+    goods = await _find_goods_by_code(
+        event,
+        session,
+        goods_type,
+        normalized_code
     )
-    obj = result.scalar_one_or_none()
-    return bool(obj and obj.enabled)
+
+    if goods is None:
+        # 未找到对应商品
+        raise ReplyFeeExc("未找到商品")
+
+    effective_min_price = await _get_effective_min_price(
+        bot,
+        str(event.group_id),
+        session
+    )
+
+    if fee < effective_min_price:
+        # 低于群最低价
+        raise ReplyFeeExc("出价低于最低价")
+
+    reply_fee = min(fee, goods.max_price)
+
+    random_reduce_limit = await get_group_random_reply_limit(
+        bot,
+        str(event.group_id),
+        session
+    )
+
+    if random_reduce_limit > 0:
+        minus = random.Random(str(event.time)).randint(
+            0,
+            random_reduce_limit
+        )
+        reply_fee = max(effective_min_price, reply_fee - minus)
+
+    return reply_fee
+
+
+def _build_random_prefix(group: Group) -> str:
+    if not group.random_prefix_enabled:
+        return ""
+
+    symbols = [
+        "·", "•", "☆", "★", "✦", "⚡", "♪", "♡", "❤", "※",
+        "✪", "➤", "—", "~", "▪", "▫", "✿", "❀", "☘", "✧"
+    ]
+
+    return random.choice(symbols)
