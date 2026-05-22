@@ -7,5 +7,6 @@ from . import (
     group_random_reply,
     manage_admin,
     set_delay,
+    set_prefix,
     view_status,
 )

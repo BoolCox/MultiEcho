@@ -9,7 +9,7 @@ from ..model.group import Group
 
 
 @open_random_prefix.handle()
-async def open_random_prefix(
+async def open_random_prefix_func(
         event: GroupMessageEvent,
         session: async_scoped_session,
         group: Match[str]
@@ -43,7 +43,7 @@ async def open_random_prefix(
 
 
 @disable_random_prefix.handle()
-async def disable_random_prefix(
+async def disable_random_prefix_func(
         event: GroupMessageEvent,
         session: async_scoped_session,
         group: Match[str]
