@@ -27,14 +27,14 @@ internal sealed partial class NonebotManager(Job job, LogService log)
     {
         if (!Directory.Exists(dir))
         {
-            _log.Write("nonebot", "directory not found, skipping");
+            _log.Write("nonebot", "目录不存在, 跳过启动");
             return;
         }
 
         var venvDir = Path.Combine(dir, ".venv");
         if (!Directory.Exists(venvDir))
         {
-            _log.Write("nonebot", ".venv not found, running uv sync...");
+            _log.Write("nonebot", ".venv 不存在, 正在运行 uv sync...");
             _status = "Syncing dependencies...";
 
             if (!RunUvSync(dir))
@@ -59,19 +59,18 @@ internal sealed partial class NonebotManager(Job job, LogService log)
             FileName = nbExe,
             Arguments = "run --reload",
             WorkingDirectory = dir,
-            UseShellExecute = false,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardInputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-            RedirectStandardOutput = true,
+
             RedirectStandardInput = true,
+            RedirectStandardOutput = true,
             RedirectStandardError = true,
+
+            StandardInputEncoding = new UTF8Encoding(false),
+            StandardOutputEncoding = new UTF8Encoding(false),
+            StandardErrorEncoding = new UTF8Encoding(false),
+
+            UseShellExecute = false,
             CreateNoWindow = true,
-            Environment =
-            {
-                ["PYTHONUTF8"] = "1",
-                ["PYTHONIOENCODING"] = "utf-8"
-            }
+            Environment = { ["PYTHONUTF8"] = "1" }
         };
 
         try
