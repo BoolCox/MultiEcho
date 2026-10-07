@@ -56,7 +56,7 @@
 	<!-- 下载并解压 NapCat 到 build/napcat1 -->
 	<Target Name="DownloadNapCat" AfterTargets="Publish" DependsOnTargets="CopyNonebot">
 		<PropertyGroup>
-			<NapcatVersion>v4.18.0</NapcatVersion>
+			<NapcatVersion>v4.18.28</NapcatVersion>
 			<NapcatUrl>https://github.com/NapNeko/NapCatQQ/releases/download/$(NapcatVersion)/NapCat.Shell.zip</NapcatUrl>
 			<NapcatZip>$(OutputDir)NapCat.zip</NapcatZip>
 			<NapcatExtractDir>$(OutputDir)napcat1</NapcatExtractDir>
