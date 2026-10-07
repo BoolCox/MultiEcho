@@ -27,6 +27,13 @@ random_reply_cache = TTLCache(maxsize=1024, ttl=300)
 delay_cache = TTLCache(maxsize=1024, ttl=300)
 goods_cache = TTLCache(maxsize=2048, ttl=300)
 
+_ECHO_PATTERNS = [
+    (re.compile(r"收\s*2\s*/(?P<code>[^/]+)/(?P<fee>\d+)"), GoodsType.NORMAL),
+    (re.compile(r"收\s*(?P<code>[^/]+)/(?P<fee>\d+)"), GoodsType.NORMAL),
+    (re.compile(r"收2\s*/(?P<code>[^/]+)/(?P<fee>\d+)一包杀"), GoodsType.ONEPACK),
+    (re.compile(r"拼随机三尾三包\s*(?P<code>[^/]+)/(?P<fee>\d+)"), GoodsType.RAND_THREE_TAIL_THREE_PACK),
+]
+
 
 @echo.handle()
 async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped_session):
@@ -227,18 +234,13 @@ async def _apply_delay(
 def _parse_and_validate_echo_command(event: GroupMessageEvent) -> tuple[str, int, GoodsType]:
     text = event.get_message().extract_plain_text().strip()
 
-    patterns = [
-        (re.fullmatch(r"收\s*2\s*/([^/]+)/(?P<fee>\d+)", text), GoodsType.NORMAL),
-        (re.fullmatch(r"收2\s*/([^/]+)/(?P<fee>\d+)一包杀", text), GoodsType.ONEPACK),
-        (re.fullmatch(r"拼随机三尾三包\s*([^/]+)/(?P<fee>\d+)", text), GoodsType.RAND_THREE_TAIL_THREE_PACK),
-    ]
-
-    for match, goods_type in patterns:
+    for pattern, goods_type in _ECHO_PATTERNS:
+        match = pattern.fullmatch(text)
         if match:
             return (
-                match.group(1).strip(),
+                match.group("code").strip(),
                 int(match.group("fee")),
-                goods_type
+                goods_type,
             )
 
     # 不符合命令格式，通过抛出 ReplyFeeExc 让上层统一处理（handler_echo 捕获）
