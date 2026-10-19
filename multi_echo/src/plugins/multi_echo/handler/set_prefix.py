@@ -1,4 +1,4 @@
-from nonebot.adapters.onebot.v11 import GroupMessageEvent
+from nonebot.adapters.onebot.v11 import Bot
 from nonebot_plugin_alconna import Match
 from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
@@ -10,7 +10,7 @@ from ..model.group import Group
 
 @open_random_prefix.handle()
 async def open_random_prefix_func(
-        event: GroupMessageEvent,
+        bot: Bot,
         session: async_scoped_session,
         group: Match[str]
 ):
@@ -19,7 +19,7 @@ async def open_random_prefix_func(
             select(Group)
             .where(
                 Group.platform_id == group.result,
-                Group.bot_qq == str(event.self_id),
+                Group.bot_qq == str(bot.self_id),
             )
         )
 
@@ -28,7 +28,7 @@ async def open_random_prefix_func(
         else:
             session.add(
                 Group(
-                    bot_qq=str(event.self_id),
+                    bot_qq=str(bot.self_id),
                     platform_id=group.result,
                     random_prefix_enabled=True
                 )
@@ -44,7 +44,7 @@ async def open_random_prefix_func(
 
 @disable_random_prefix.handle()
 async def disable_random_prefix_func(
-        event: GroupMessageEvent,
+        bot: Bot,
         session: async_scoped_session,
         group: Match[str]
 ):
@@ -53,7 +53,7 @@ async def disable_random_prefix_func(
             select(Group)
             .where(
                 Group.platform_id == group.result,
-                Group.bot_qq == str(event.self_id),
+                Group.bot_qq == str(bot.self_id),
             )
         )
 
@@ -62,7 +62,7 @@ async def disable_random_prefix_func(
         else:
             session.add(
                 Group(
-                    bot_qq=str(event.self_id),
+                    bot_qq=str(bot.self_id),
                     platform_id=group.result,
                     random_prefix_enabled=False
                 )

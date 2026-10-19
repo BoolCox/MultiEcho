@@ -26,6 +26,7 @@ async def is_admin(event: Event) -> bool:
 
 
 def is_super_admin(event: Event) -> bool:
+    """配置文件的管理员和机器人自身都属于超级管理员"""
     try:
         user_id = event.get_user_id()
     except ValueError:
