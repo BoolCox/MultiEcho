@@ -31,6 +31,7 @@ _ECHO_PATTERNS = [
     (re.compile(r"收\s*2\s*/(?P<code>[^/]+)/(?P<fee>\d+)"), GoodsType.NORMAL),
     (re.compile(r"收\s*(?P<code>[^/]+)/(?P<fee>\d+)"), GoodsType.NORMAL),
     (re.compile(r"收2\s*/(?P<code>[^/]+)/(?P<fee>\d+)一包杀"), GoodsType.ONEPACK),
+    (re.compile(r"收\s*(?P<code>[^/]+)/(?P<fee>\d+)一包杀"), GoodsType.ONEPACK),
     (re.compile(r"拼随机三尾三包\s*(?P<code>[^/]+)/(?P<fee>\d+)"), GoodsType.RAND_THREE_TAIL_THREE_PACK),
 ]
 
@@ -75,7 +76,7 @@ async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped
 
     await echo.send(
         MessageSegment.at(event.get_user_id())
-        + f"{prefix}{reply_fee}"
+        + f"{reply_fee}{prefix}"
     )
     profiler.mark("send")
     profiler.report()
@@ -303,8 +304,7 @@ def _build_random_prefix(group: dict) -> str:
         return ""
 
     symbols = [
-        "·", "%", "(", "-", ".", ",", "#", "!", "*", "+",
-        "/", "^"
+        "%", "(", "-", ".", ",", "#", "!", "*", "+"
     ]
 
     return random.choice(symbols)
