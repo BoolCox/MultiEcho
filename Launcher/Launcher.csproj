@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
@@ -61,8 +61,8 @@
 			<NapcatZip>$(OutputDir)NapCat.zip</NapcatZip>
 			<NapcatExtractDir>$(OutputDir)napcat1</NapcatExtractDir>
 		</PropertyGroup>
-		<Exec Command="powershell -Command &quot;Invoke-WebRequest -Uri $(NapcatUrl) -OutFile &quot;$(NapcatZip)&quot;&quot;" />
-		<Exec Command="powershell -Command &quot;Expand-Archive -Path &quot;$(NapcatZip)&quot; -DestinationPath &quot;$(NapcatExtractDir)&quot; -Force&quot;" />
+		<DownloadFile SourceUrl="$(NapcatUrl)" DestinationFolder="$(OutputDir)" DestinationFileName="NapCat.zip" Retries="3" RetryDelayMilliseconds="1000" />
+		<Unzip SourceFiles="$(NapcatZip)" DestinationFolder="$(NapcatExtractDir)" OverwriteReadOnlyFiles="true" />
 		<Delete Files="$(NapcatZip)" />
 	</Target>
 
@@ -80,10 +80,12 @@
 		<PropertyGroup>
 			<ZipVersion Condition="'$(Version)' != ''">$(Version)</ZipVersion>
 			<ZipFileName>$(AssemblyName)-Candy-$(ZipVersion)-$(RuntimeIdentifier).zip</ZipFileName>
+			<TempZipFilePath>$(RootDir)$(ZipFileName)</TempZipFilePath>
 			<ZipFilePath>$(OutputDir)$(ZipFileName)</ZipFilePath>
 		</PropertyGroup>
 		<Message Text="Creating zip: $(ZipFilePath)" Importance="high" />
-		<Exec Command="powershell -NoProfile -Command &quot;Compress-Archive -Path &quot;$(OutputDir)*&quot; -DestinationPath &quot;$(ZipFilePath)&quot; -Force&quot;" IgnoreExitCode="false" />
+		<ZipDirectory SourceDirectory="$(OutputDir)" DestinationFile="$(TempZipFilePath)" Overwrite="true" />
+		<Move SourceFiles="$(TempZipFilePath)" DestinationFiles="$(ZipFilePath)" OverwriteReadOnlyFiles="true" />
 		<Message Text="Opening folder: $(OutputDir)" Importance="high" />
 		<Exec Command="explorer &quot;$(OutputDir)&quot;" IgnoreExitCode="true" />
 	</Target>
