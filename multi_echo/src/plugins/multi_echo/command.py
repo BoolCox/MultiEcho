@@ -3,20 +3,24 @@ from nonebot import on_command, on_message
 from nonebot.rule import to_me
 from nonebot_plugin_alconna import on_alconna
 
-from .handler.permission import SUPER_ADMIN, ADMIN_OR_SUPER_ADMIN
+from .handler.permission import (
+    ADMIN_OR_SUPER_ADMIN_OR_SELF,
+    SUPER_ADMIN,
+    SUPER_ADMIN_OR_SELF,
+)
 
-# 1. 管理员管理（仅超级管理员）
+# 1. 管理员管理（仅超级管理员或机器人自身）
 add_admin = on_alconna(
     Alconna("添加主人", Args["qq?", str], meta=CommandMeta(compact=True)),
     response_self=True,
-    permission=SUPER_ADMIN,
+    permission=SUPER_ADMIN_OR_SELF,
     block=True
 )
 
 del_admin = on_alconna(
     Alconna("删除主人", Args["qq?", str], meta=CommandMeta(compact=True)),
     response_self=True,
-    permission=SUPER_ADMIN,
+    permission=SUPER_ADMIN_OR_SELF,
     block=True
 )
 
@@ -24,32 +28,32 @@ del_admin = on_alconna(
 add_group = on_alconna(
     Alconna("添加群", Args["qq?", str], meta=CommandMeta(compact=True)),
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
 del_group = on_alconna(
     Alconna("删除群", Args["qq?", str], meta=CommandMeta(compact=True)),
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
 add_blocked_user = on_alconna(
     Alconna("添加屏蔽人", Args["qq?", str], meta=CommandMeta(compact=True)),
     response_self=True,
-    permission=SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
 del_blocked_user = on_alconna(
     Alconna("删除屏蔽人", Args["qq?", str], meta=CommandMeta(compact=True)),
     response_self=True,
-    permission=SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
-# 3 商品管理
+# 3. 商品管理（仅配置文件的超级管理员 SUPERUSER 可操作，机器人自身和主人均不可操作）
 set_goods = on_alconna(
     Alconna(
         "设置压车数",
@@ -58,7 +62,7 @@ set_goods = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=SUPER_ADMIN,
     block=True
 )
 
@@ -70,7 +74,7 @@ del_goods = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=SUPER_ADMIN,
     block=True
 )
 
@@ -82,7 +86,7 @@ set_rand_three_tail_three_pack_goods = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=SUPER_ADMIN,
     block=True
 )
 
@@ -94,7 +98,7 @@ del_rand_three_tail_three_pack_goods = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=SUPER_ADMIN,
     block=True
 )
 
@@ -106,7 +110,7 @@ set_onepack_goods = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=SUPER_ADMIN,
     block=True
 )
 
@@ -118,7 +122,7 @@ del_onepack_goods = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=SUPER_ADMIN,
     block=True
 )
 
@@ -134,7 +138,7 @@ set_min_price = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=SUPER_ADMIN,
     block=True
 )
 
@@ -142,14 +146,14 @@ del_goods_all = on_alconna(
     Alconna("清空商品"),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=SUPER_ADMIN,
     block=True
 )
 
 # 4. 开关与状态（需 @机器人）
 total_switch = on_command(
     "切换总开关",
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
@@ -157,7 +161,7 @@ view_status = on_command(
     "查看状态",
     rule=to_me(),
     aliases={"查看跟随状态"},
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
@@ -165,14 +169,14 @@ view_whitelist_group = on_command(
     "查看群列表",
     rule=to_me(),
     aliases={"查看当前添加群"},
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
 set_delay = on_alconna(
     Alconna("设置群延迟", Args["args?", str], meta=CommandMeta(compact=True)),
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
@@ -188,7 +192,7 @@ set_group_random_reply = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
@@ -201,7 +205,7 @@ open_random_prefix = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
@@ -214,11 +218,11 @@ disable_random_prefix = on_alconna(
     ),
     skip_for_unmatch=False,
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
-# 4. 随机回复群开关
+# 5. 随机回复群开关
 switch_group_random_reply = on_alconna(
     Alconna(
         "切换随机回复群开关",
@@ -226,7 +230,7 @@ switch_group_random_reply = on_alconna(
         meta=CommandMeta(compact=True)
     ),
     response_self=True,
-    permission=ADMIN_OR_SUPER_ADMIN,
+    permission=ADMIN_OR_SUPER_ADMIN_OR_SELF,
     block=True
 )
 
