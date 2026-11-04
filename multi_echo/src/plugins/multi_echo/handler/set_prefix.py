@@ -4,6 +4,7 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
+from .echo import invalidate_group_cache
 from ..command import open_random_prefix, disable_random_prefix
 from ..model.group import Group
 
@@ -35,6 +36,7 @@ async def open_random_prefix_func(
             )
 
         await session.commit()
+        invalidate_group_cache(str(bot.self_id), str(group.result))
 
         await open_random_prefix.finish("已开启群压车符号")
     except SQLAlchemyError:
@@ -69,6 +71,7 @@ async def disable_random_prefix_func(
             )
 
         await session.commit()
+        invalidate_group_cache(str(bot.self_id), str(group.result))
 
         await disable_random_prefix.finish("已关闭群压车符号")
     except SQLAlchemyError:

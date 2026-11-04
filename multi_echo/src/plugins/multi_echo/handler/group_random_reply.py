@@ -4,6 +4,7 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
+from .echo import invalidate_random_reply_cache
 from ..command import set_group_random_reply, switch_group_random_reply
 from ..model.group_random_reply import GroupRandomReply
 
@@ -36,6 +37,7 @@ async def handle_set_group_random_reply(
         else:
             obj.random_reduce_limit = random_reduce_limit.result
         await session.commit()
+        invalidate_random_reply_cache(str(bot.self_id), str(group_id.result))
         await set_group_random_reply.finish(f"已设置群 {group_id.result} 随机减值上限为：{random_reduce_limit.result}")
     except SQLAlchemyError:
         await session.rollback()
@@ -67,11 +69,13 @@ async def handle_switch_group_random_reply(
                 enabled=True
             ))
             await session.commit()
+            invalidate_random_reply_cache(str(bot.self_id), str(group_id.result))
             await switch_group_random_reply.finish(f"群 {group_id.result} 随机回复已开启")
         else:
             obj.enabled = not obj.enabled
             status = "开启" if obj.enabled else "关闭"  # 提前获取
             await session.commit()
+            invalidate_random_reply_cache(str(bot.self_id), str(group_id.result))
             await switch_group_random_reply.finish(f"群 {group_id.result} 随机回复已{status}")
     except SQLAlchemyError:
         await session.rollback()

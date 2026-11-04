@@ -20,12 +20,49 @@ from ..model.group_fee_rule import GroupFeeRule
 from ..model.group_random_reply import GroupRandomReply
 from ..model.total_switch import TotalSwitch
 
+total_switch_cache = TTLCache(maxsize=1, ttl=300)
 group_cache = TTLCache(maxsize=1024, ttl=300)
 block_cache = TTLCache(maxsize=1024, ttl=300)
 min_price_cache = TTLCache(maxsize=1024, ttl=300)
 random_reply_cache = TTLCache(maxsize=1024, ttl=300)
 delay_cache = TTLCache(maxsize=1024, ttl=300)
 goods_cache = TTLCache(maxsize=2048, ttl=300)
+
+
+def invalidate_total_switch_cache() -> None:
+    total_switch_cache.clear()
+
+
+def invalidate_group_cache(bot_qq: str, group_id: str) -> None:
+    group_cache.pop(f"{bot_qq}:{group_id}", None)
+
+
+def invalidate_block_cache(bot_qq: str, user_qq: str) -> None:
+    block_cache.pop(f"{bot_qq}:{user_qq}", None)
+
+
+def invalidate_min_price_cache(bot_qq: str, group_id: str) -> None:
+    min_price_cache.pop(f"{bot_qq}:{group_id}", None)
+
+
+def invalidate_random_reply_cache(bot_qq: str, group_id: str) -> None:
+    random_reply_cache.pop(f"{bot_qq}:{group_id}", None)
+
+
+def invalidate_delay_cache(bot_qq: str, group_id: str) -> None:
+    delay_cache.pop(f"{bot_qq}:{group_id}", None)
+
+
+def invalidate_goods_cache(bot_qq: str, goods_type: str, normalized_code: str) -> None:
+    goods_cache.pop(f"{bot_qq}:{goods_type}:{normalized_code}", None)
+
+
+def invalidate_all_goods_cache(bot_qq: str) -> None:
+    prefix = f"{bot_qq}:"
+    keys_to_delete = [k for k in goods_cache.keys() if k.startswith(prefix)]
+    for k in keys_to_delete:
+        goods_cache.pop(k, None)
+
 
 _ECHO_PATTERNS = [
     (re.compile(r"收\s*2\s*/(?P<code>[^/]+)/(?P<fee>\d+)"), GoodsType.NORMAL),
@@ -156,14 +193,20 @@ async def _ensure_echo_available(
         session: async_scoped_session
 ) -> dict:
     """确保插件/群组对该 bot 的 echo 功能可用；不可用时抛出 ReplyFeeExc；返回包含群组状态字典"""
+    if "enabled" in total_switch_cache:
+        switch_enabled = total_switch_cache["enabled"]
+    else:
+        total_switch = await session.get(TotalSwitch, 1)
+        switch_enabled = bool(total_switch and total_switch.enabled)
+        total_switch_cache["enabled"] = switch_enabled
+
+    if not switch_enabled:
+        raise ReplyFeeExc("功能未启用")
+
     cache_key = f"{bot.self_id}:{event.group_id}"
     if cache_key in group_cache:
         status = group_cache[cache_key]
     else:
-        total_switch = await session.get(TotalSwitch, 1)
-        if total_switch is None or not total_switch.enabled:
-            raise ReplyFeeExc("功能未启用")
-
         result = await session.execute(
             select(Group).where(
                 Group.bot_qq == bot.self_id,

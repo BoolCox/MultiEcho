@@ -4,6 +4,7 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from .echo import invalidate_block_cache
 from .utils import _valid_qq
 from ..command import add_blocked_user, del_blocked_user
 from ..model.blocked_user import BlockedUser
@@ -24,9 +25,11 @@ async def handler_add_blocked_user(
     try:
         session.add(BlockedUser(bot_qq=bot.self_id, user_qq=user))
         await session.commit()
+        invalidate_block_cache(str(bot.self_id), user)
         await add_blocked_user.finish(f"已屏蔽用户：{user}")
     except IntegrityError:
         await session.rollback()
+        invalidate_block_cache(str(bot.self_id), user)
         await add_blocked_user.finish(f"已屏蔽用户：{user}")
     except SQLAlchemyError:
         await session.rollback()
@@ -57,6 +60,7 @@ async def handler_del_blocked_user(
         if obj is not None:
             await session.delete(obj)
             await session.commit()
+            invalidate_block_cache(str(bot.self_id), user)
 
         await del_blocked_user.finish("已取消屏蔽该用户")
     except SQLAlchemyError:

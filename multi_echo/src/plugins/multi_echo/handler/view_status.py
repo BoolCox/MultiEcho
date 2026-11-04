@@ -3,6 +3,7 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, Bot
 from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select, delete
 
+from .echo import invalidate_all_goods_cache
 from ..command import view_status, view_whitelist_group, del_goods_all
 from ..model.goods import Goods
 from ..model.group import Group
@@ -60,4 +61,5 @@ async def handler_view_whitelist_group(session: async_scoped_session):
 async def handler_del_goods_all(bot: Bot, session: async_scoped_session):
     await session.execute(delete(Goods).where(Goods.bot_qq == bot.self_id))
     await session.commit()
+    invalidate_all_goods_cache(str(bot.self_id))
     await del_goods_all.finish(f"已成功删除 {bot.self_id} 下的所有商品记录")

@@ -3,6 +3,7 @@ from nonebot_plugin_alconna import Match
 from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 
+from .echo import invalidate_delay_cache
 from ..command import set_delay
 from ..model.delay import Delay
 
@@ -35,4 +36,5 @@ async def handler_set_delay(bot: Bot, session: async_scoped_session, args: Match
         session.add(obj)
 
     await session.commit()
+    invalidate_delay_cache(str(bot_id), group_id)
     await set_delay.finish(f"已将该群的回复延迟设置为 {delay} 毫秒")

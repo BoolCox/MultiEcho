@@ -3,7 +3,11 @@ from nonebot_plugin_alconna import Match
 from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 
-from .echo import _normalize_code
+from .echo import (
+    _normalize_code,
+    invalidate_goods_cache,
+    invalidate_min_price_cache,
+)
 from ..command import (
     set_goods,
     del_goods,
@@ -34,6 +38,8 @@ async def handle_set_goods(
 
     await _upsert_goods(session, bot.self_id, parsed, "normal")
     await session.commit()
+    for code, _ in parsed:
+        invalidate_goods_cache(str(bot.self_id), "normal", code)
 
     if invalid and duplicated_count:
         await set_goods.finish(
@@ -58,6 +64,10 @@ async def handle_del_goods(
 
     deleted = await _delete_goods(session, bot.self_id, goods_list.result, "normal")
     await session.commit()
+    for entry in goods_list.result:
+        norm = _normalize_code(entry.split("-", 1)[0])
+        if norm:
+            invalidate_goods_cache(str(bot.self_id), "normal", norm)
     await del_goods.finish(f"已删除：{deleted} 项")
 
 
@@ -77,6 +87,8 @@ async def handle_set_onepack_goods(
 
     await _upsert_goods(session, bot.self_id, parsed, "onepack")
     await session.commit()
+    for code, _ in parsed:
+        invalidate_goods_cache(str(bot.self_id), "onepack", code)
 
     if invalid and duplicated_count:
         await set_goods.finish(
@@ -101,6 +113,10 @@ async def handle_del_onepack_goods(
 
     deleted = await _delete_goods(session, bot.self_id, goods_list.result, "onepack")
     await session.commit()
+    for entry in goods_list.result:
+        norm = _normalize_code(entry.split("-", 1)[0])
+        if norm:
+            invalidate_goods_cache(str(bot.self_id), "onepack", norm)
     await del_onepack_goods.finish(f"已删除：{deleted} 项")
 
 
@@ -120,6 +136,8 @@ async def handle_set_rand_three_tail_three_pack_goods(
 
     await _upsert_goods(session, bot.self_id, parsed, "rand_three_tail_three_pack")
     await session.commit()
+    for code, _ in parsed:
+        invalidate_goods_cache(str(bot.self_id), "rand_three_tail_three_pack", code)
 
     if invalid and duplicated_count:
         await set_goods.finish(
@@ -143,6 +161,10 @@ async def handle_del_rand_three_tail_three_pack_goods(
         return
     deleted = await _delete_goods(session, bot.self_id, goods_range.result, "rand_three_tail_three_pack")
     await session.commit()
+    for entry in goods_range.result:
+        norm = _normalize_code(entry.split("-", 1)[0])
+        if norm:
+            invalidate_goods_cache(str(bot.self_id), "rand_three_tail_three_pack", norm)
     await del_rand_three_tail_three_pack_goods.finish(f"已删除：{deleted} 项")
 
 
@@ -174,6 +196,7 @@ async def handle_set_min_price(
         rule.min_price = price
 
     await session.commit()
+    invalidate_min_price_cache(str(bot.self_id), group_id)
     await set_min_price.finish(f"已设置该群费用下限：{price}")
 
 

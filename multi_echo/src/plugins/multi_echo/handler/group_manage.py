@@ -4,6 +4,7 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from .echo import invalidate_group_cache
 from .utils import _valid_qq
 from ..command import add_group, del_group
 from ..model.group import Group
@@ -30,10 +31,12 @@ async def handler_add_group(bot: Bot, session: async_scoped_session, qq: Match[s
         else:
             obj.enabled = True
         await session.commit()
+        invalidate_group_cache(str(bot.self_id), group)
         await add_group.finish(f"已添加群：{group}")
 
     except IntegrityError:
         await session.rollback()
+        invalidate_group_cache(str(bot.self_id), group)
         await add_group.finish(f"已添加群：{group}")
 
 
@@ -58,6 +61,7 @@ async def handler_del_group(bot: Bot, session: async_scoped_session, qq: Match[s
         if obj is not None:
             obj.enabled = False
             await session.commit()
+            invalidate_group_cache(str(bot.self_id), group)
 
         await del_group.finish("已取消设置该群")
 
