@@ -1,3 +1,4 @@
+from cachetools import TTLCache
 from nonebot import get_plugin_config
 from nonebot.adapters.onebot.v11 import Event
 from nonebot.permission import Permission
@@ -8,6 +9,12 @@ from ..config import EchoConfig
 from ..model.admin import Admin
 
 config = get_plugin_config(EchoConfig)
+
+admin_cache = TTLCache(maxsize=1024, ttl=300)
+
+
+def invalidate_admin_cache(bot_qq: str, admin_qq: str) -> None:
+    admin_cache.pop(f"{bot_qq}:{admin_qq}", None)
 
 
 def _get_user_id(event: Event) -> str | None:
@@ -34,17 +41,24 @@ async def is_admin(event: Event) -> bool:
     if user_qq is None:
         return False
 
+    bot_qq = str(event.self_id)
+    cache_key = f"{bot_qq}:{user_qq}"
+    if cache_key in admin_cache:
+        return admin_cache[cache_key]
+
     result = (
         select(Admin)
         .where(
-            Admin.bot_qq == str(event.self_id),
+            Admin.bot_qq == bot_qq,
             Admin.admin_qq == user_qq
         )
     )
     async with get_session() as session:
         found = await session.scalars(result)
-        found = found.first()
-    return bool(found)
+        is_found = bool(found.first())
+
+    admin_cache[cache_key] = is_found
+    return is_found
 
 
 async def is_super_admin_or_self(event: Event) -> bool:

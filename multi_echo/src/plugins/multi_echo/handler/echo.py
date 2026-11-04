@@ -5,12 +5,12 @@ import re
 from cachetools import TTLCache
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
 from nonebot.adapters.onebot.v11.bot import Bot
-from nonebot_plugin_orm import async_scoped_session
+from nonebot.matcher import Matcher
+from nonebot_plugin_orm import get_session
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..command import echo
-from ..dependencies.profiler import AsyncProfiler
 from ..exceptions import ReplyFeeExc
 from ..model.blocked_user import BlockedUser
 from ..model.delay import Delay
@@ -74,49 +74,40 @@ _ECHO_PATTERNS = [
 
 
 @echo.handle()
-async def handler_echo(bot: Bot, event: GroupMessageEvent, session: async_scoped_session):
-    profiler = AsyncProfiler()
+async def handler_echo(bot: Bot, event: GroupMessageEvent, matcher: Matcher):
+    parsed = _parse_and_validate_echo_command(event)
+    if parsed is None:
+        return
+
+    # 既然已匹配收车命令格式，无需再向后传播给 priority=5 的管理命令
+    matcher.stop_propagation()
 
     try:
-        profiler.mark("start")
-
-        parsed = _parse_and_validate_echo_command(event)
-        profiler.mark("_parse")
-
         # 获取群实例且验证是否可用
-        group = await _ensure_echo_available(bot, event, session)
-        profiler.mark("_ensure_echo_available")
+        group = await _ensure_echo_available(bot, event)
 
         # 检查是否为被屏蔽用户
-        await _ensure_not_blocked_user(bot, event, session)
-        profiler.mark("_ensure_not_blocked_user")
+        await _ensure_not_blocked_user(bot, event)
 
         reply_fee = await _calculate_reply_fee(
             bot=bot,
             event=event,
-            session=session,
             parsed=parsed
         )
-        profiler.mark("_calculate_reply_fee")
 
         # 应用延迟
-        await _apply_delay(bot, event, session)
-        profiler.mark("_apply_delay")
+        await _apply_delay(bot, event)
 
         # 设置前缀
         prefix = _build_random_prefix(group)
-        profiler.mark("_build_random_prefix")
 
     except (SQLAlchemyError, ReplyFeeExc):
-        await session.rollback()
         return
 
     await echo.send(
         MessageSegment.at(event.get_user_id())
         + f"{reply_fee}{prefix}"
     )
-    profiler.mark("send")
-    profiler.report()
 
 
 def _normalize_code(raw: str) -> str:
@@ -126,63 +117,66 @@ def _normalize_code(raw: str) -> str:
     return "".join(sorted(code))
 
 
-async def _find_goods_by_code(event, session, goods_type, normalized_code) -> dict | None:
+async def _find_goods_by_code(event: GroupMessageEvent, goods_type: GoodsType, normalized_code: str) -> dict | None:
     bot_id = str(event.self_id)
     cache_key = f"{bot_id}:{goods_type.value}:{normalized_code}"
     if cache_key in goods_cache:
         return goods_cache[cache_key]
 
-    result = await session.execute(
-        select(Goods.max_price)
-        .where(
-            Goods.bot_qq == bot_id,
-            Goods.goods_type == goods_type.value,
-            Goods.code == normalized_code,
+    async with get_session() as session:
+        result = await session.execute(
+            select(Goods.max_price)
+            .where(
+                Goods.bot_qq == bot_id,
+                Goods.goods_type == goods_type.value,
+                Goods.code == normalized_code,
+            )
+            .limit(1)
         )
-        .limit(1)
-    )
-    mp = result.scalar_one_or_none()
-    res = {"max_price": mp} if mp is not None else None
+        mp = result.scalar_one_or_none()
 
+    res = {"max_price": mp} if mp is not None else None
     goods_cache[cache_key] = res
     return res
 
 
-async def _get_effective_min_price(bot: Bot, group_id: str, session: async_scoped_session) -> int:
+async def _get_effective_min_price(bot: Bot, group_id: str) -> int:
     cache_key = f"{bot.self_id}:{group_id}"
     if cache_key in min_price_cache:
         return min_price_cache[cache_key]
 
-    result = await session.execute(
-        select(GroupFeeRule.min_price)
-        .where(
-            GroupFeeRule.bot_qq == bot.self_id,
-            GroupFeeRule.group_id == group_id,
+    async with get_session() as session:
+        result = await session.execute(
+            select(GroupFeeRule.min_price)
+            .where(
+                GroupFeeRule.bot_qq == bot.self_id,
+                GroupFeeRule.group_id == group_id,
+            )
+            .limit(1)
         )
-        .limit(1)
-    )
-    group_min_price = result.scalar_one_or_none()
-    effective_price = group_min_price if group_min_price is not None else 0
+        group_min_price = result.scalar_one_or_none()
 
+    effective_price = group_min_price if group_min_price is not None else 0
     min_price_cache[cache_key] = effective_price
     return effective_price
 
 
-async def get_group_random_reply_limit(bot: Bot, group_id: str, session: async_scoped_session) -> int:
+async def get_group_random_reply_limit(bot: Bot, group_id: str) -> int:
     cache_key = f"{bot.self_id}:{group_id}"
     if cache_key in random_reply_cache:
         return random_reply_cache[cache_key]
 
-    result = await session.execute(
-        select(GroupRandomReply)
-        .where(
-            GroupRandomReply.bot_qq == bot.self_id,
-            GroupRandomReply.group_id == group_id
+    async with get_session() as session:
+        result = await session.execute(
+            select(GroupRandomReply)
+            .where(
+                GroupRandomReply.bot_qq == bot.self_id,
+                GroupRandomReply.group_id == group_id
+            )
         )
-    )
-    obj = result.scalar_one_or_none()
-    val = obj.random_reduce_limit if obj and obj.enabled and obj.random_reduce_limit else 0
+        obj = result.scalar_one_or_none()
 
+    val = obj.random_reduce_limit if obj and obj.enabled and obj.random_reduce_limit else 0
     random_reply_cache[cache_key] = val
     return val
 
@@ -190,14 +184,14 @@ async def get_group_random_reply_limit(bot: Bot, group_id: str, session: async_s
 async def _ensure_echo_available(
         bot: Bot,
         event: GroupMessageEvent,
-        session: async_scoped_session
 ) -> dict:
     """确保插件/群组对该 bot 的 echo 功能可用；不可用时抛出 ReplyFeeExc；返回包含群组状态字典"""
     if "enabled" in total_switch_cache:
         switch_enabled = total_switch_cache["enabled"]
     else:
-        total_switch = await session.get(TotalSwitch, 1)
-        switch_enabled = bool(total_switch and total_switch.enabled)
+        async with get_session() as session:
+            total_switch = await session.get(TotalSwitch, 1)
+            switch_enabled = bool(total_switch and total_switch.enabled)
         total_switch_cache["enabled"] = switch_enabled
 
     if not switch_enabled:
@@ -207,15 +201,16 @@ async def _ensure_echo_available(
     if cache_key in group_cache:
         status = group_cache[cache_key]
     else:
-        result = await session.execute(
-            select(Group).where(
-                Group.bot_qq == bot.self_id,
-                Group.platform_id == str(event.group_id),
-                Group.enabled.is_(True),
+        async with get_session() as session:
+            result = await session.execute(
+                select(Group).where(
+                    Group.bot_qq == bot.self_id,
+                    Group.platform_id == str(event.group_id),
+                    Group.enabled.is_(True),
+                )
             )
-        )
+            group = result.scalar_one_or_none()
 
-        group = result.scalar_one_or_none()
         status = {
             "has_group": bool(group),
             "random_prefix_enabled": group.random_prefix_enabled if group else False
@@ -231,20 +226,20 @@ async def _ensure_echo_available(
 async def _ensure_not_blocked_user(
         bot: Bot,
         event: GroupMessageEvent,
-        session: async_scoped_session
 ):
     """若用户被屏蔽则抛出 ReplyFeeExc，否则什么也不做"""
     cache_key = f"{bot.self_id}:{event.get_user_id()}"
     if cache_key in block_cache:
         is_blocked = block_cache[cache_key]
     else:
-        result = await session.execute(
-            select(BlockedUser).where(
-                BlockedUser.bot_qq == bot.self_id,
-                BlockedUser.user_qq == event.get_user_id(),
+        async with get_session() as session:
+            result = await session.execute(
+                select(BlockedUser).where(
+                    BlockedUser.bot_qq == bot.self_id,
+                    BlockedUser.user_qq == event.get_user_id(),
+                )
             )
-        )
-        is_blocked = result.scalar_one_or_none() is not None
+            is_blocked = result.scalar_one_or_none() is not None
         block_cache[cache_key] = is_blocked
 
     if is_blocked:
@@ -254,20 +249,19 @@ async def _ensure_not_blocked_user(
 async def _apply_delay(
         bot: Bot,
         event: GroupMessageEvent,
-        session: async_scoped_session
 ):
     cache_key = f"{bot.self_id}:{event.group_id}"
     if cache_key in delay_cache:
         delay_ms = delay_cache[cache_key]
     else:
-        result = await session.execute(
-            select(Delay).where(
-                Delay.group_id == str(event.group_id),
-                Delay.bot_qq == bot.self_id
+        async with get_session() as session:
+            result = await session.execute(
+                select(Delay).where(
+                    Delay.group_id == str(event.group_id),
+                    Delay.bot_qq == bot.self_id
+                )
             )
-        )
-
-        delay_obj = result.scalar_one_or_none()
+            delay_obj = result.scalar_one_or_none()
         delay_ms = delay_obj.delay if delay_obj else 0
         delay_cache[cache_key] = delay_ms
 
@@ -275,8 +269,10 @@ async def _apply_delay(
         await asyncio.sleep(delay_ms / 1000)
 
 
-def _parse_and_validate_echo_command(event: GroupMessageEvent) -> tuple[str, int, GoodsType]:
+def _parse_and_validate_echo_command(event: GroupMessageEvent) -> tuple[str, int, GoodsType] | None:
     text = event.get_message().extract_plain_text().strip()
+    if not text or not text.startswith(("收", "拼随机三尾三包")):
+        return None
 
     for pattern, goods_type in _ECHO_PATTERNS:
         match = pattern.fullmatch(text)
@@ -287,14 +283,12 @@ def _parse_and_validate_echo_command(event: GroupMessageEvent) -> tuple[str, int
                 goods_type,
             )
 
-    # 不符合命令格式，通过抛出 ReplyFeeExc 让上层统一处理（handler_echo 捕获）
-    raise ReplyFeeExc("命令格式不匹配")
+    return None
 
 
 async def _calculate_reply_fee(
         bot: Bot,
         event: GroupMessageEvent,
-        session: async_scoped_session,
         parsed: tuple[str, int, GoodsType],
 ) -> int:
     code, fee, goods_type = parsed
@@ -305,7 +299,6 @@ async def _calculate_reply_fee(
 
     goods = await _find_goods_by_code(
         event,
-        session,
         goods_type,
         normalized_code
     )
@@ -317,7 +310,6 @@ async def _calculate_reply_fee(
     effective_min_price = await _get_effective_min_price(
         bot,
         str(event.group_id),
-        session
     )
 
     if fee < effective_min_price:
@@ -329,7 +321,6 @@ async def _calculate_reply_fee(
     random_reduce_limit = await get_group_random_reply_limit(
         bot,
         str(event.group_id),
-        session
     )
 
     if random_reduce_limit > 0:
