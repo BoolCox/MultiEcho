@@ -8,18 +8,26 @@ namespace Launcher.Services;
 
 internal sealed partial class NapCatManager(Job job, LogService log)
 {
-    private readonly List<NapCatInstance> _instances = [];
+    private const int BaseWebUiPort = 6099;
+    private static readonly TimeSpan s_launchInterval = TimeSpan.FromSeconds(2);
+
+    // 整体替换数组，避免 UI 线程遍历时集合被修改
+    private volatile NapCatInstance[] _instances = [];
     private readonly ConcurrentQueue<string> _pendingUrls = new();
     private readonly LogService _log = log;
 
     public IReadOnlyList<NapCatInstance> Instances => _instances;
 
-    public void LaunchAll(string[] dirs)
+    public async Task LaunchAllAsync(string[] dirs, CancellationToken cancellationToken)
     {
-        foreach (var dir in dirs)
+        for (var i = 0; i < dirs.Length; i++)
         {
-            if (Launch(dir) is { } inst)
-                _instances.Add(inst);
+            if (i > 0)
+                await Task.Delay(s_launchInterval, cancellationToken);
+
+            // 为每个实例分配独立的 WebUI 端口，避免并发启动时抢占同一端口
+            if (Launch(dirs[i], BaseWebUiPort + i) is { } inst)
+                _instances = [.. _instances, inst];
         }
     }
 
@@ -41,7 +49,7 @@ internal sealed partial class NapCatManager(Job job, LogService log)
         }
     }
 
-    private NapCatInstance? Launch(string napcatDir)
+    private NapCatInstance? Launch(string napcatDir, int webUiPort)
     {
         var name = Path.GetFileName(napcatDir);
         var launcher = Path.Combine(napcatDir, "launcher.bat");
@@ -63,7 +71,11 @@ internal sealed partial class NapCatManager(Job job, LogService log)
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            Environment = { ["NO_COLOR"] = "1" }
+            Environment =
+            {
+                ["NO_COLOR"] = "1",
+                ["NAPCAT_WEBUI_PREFERRED_PORT"] = webUiPort.ToString()
+            }
         };
 
         var instance = new NapCatInstance(name);
@@ -78,7 +90,7 @@ internal sealed partial class NapCatManager(Job job, LogService log)
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
             instance.Process = proc;
-            _log.Write("napcat", $"[{name}] started (PID {proc.Id})");
+            _log.Write("napcat", $"[{name}] started (PID {proc.Id}, preferred WebUI port {webUiPort})");
             return instance;
         }
         catch (Exception ex)

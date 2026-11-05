@@ -34,7 +34,9 @@ internal sealed partial class LauncherHostedService(
             LinkConfigs(napcatDirs, log);
             log.Write("app", "启动中...");
             nonebot.Start(nonebotDir);
-            napcat.LaunchAll(napcatDirs);
+
+            // 后台逐个错峰启动，不阻塞浏览器打开循环
+            _ = LaunchNapCatsAsync(napcatDirs, stoppingToken);
         }
 
         while (!stoppingToken.IsCancellationRequested)
@@ -49,6 +51,21 @@ internal sealed partial class LauncherHostedService(
             {
                 break;
             }
+        }
+    }
+
+    private async Task LaunchNapCatsAsync(string[] dirs, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await napcat.LaunchAllAsync(dirs, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            log.Write("app", $"NapCat 启动异常: {ex.Message}");
         }
     }
 
