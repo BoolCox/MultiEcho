@@ -3,7 +3,7 @@ from nonebot_plugin_alconna import Match
 from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 
-from .echo import invalidate_delay_cache
+from .cache import invalidate_delay_cache
 from ..command import set_delay
 from ..model.delay import Delay
 
@@ -26,7 +26,6 @@ async def handler_set_delay(bot: Bot, session: async_scoped_session, args: Match
         await set_delay.finish("延迟必须在0~30000毫秒之间")
 
     bot_id = bot.self_id
-    # 查询现有记录
     res = await session.execute(select(Delay).where(Delay.bot_qq == bot_id, Delay.group_id == group_id))
     obj = res.scalar_one_or_none()
     if obj:

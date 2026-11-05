@@ -2,7 +2,7 @@ from nonebot import get_bot
 from nonebot.adapters.onebot.v11.bot import Bot
 from nonebot_plugin_orm import async_scoped_session
 
-from .echo import invalidate_total_switch_cache
+from .cache import invalidate_total_switch_cache
 from ..command import total_switch
 from ..model.total_switch import TotalSwitch
 

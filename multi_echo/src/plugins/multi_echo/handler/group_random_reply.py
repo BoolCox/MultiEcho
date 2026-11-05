@@ -4,7 +4,7 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from .echo import invalidate_random_reply_cache
+from .cache import invalidate_random_reply_cache
 from ..command import set_group_random_reply, switch_group_random_reply
 from ..model.group_random_reply import GroupRandomReply
 
@@ -73,7 +73,7 @@ async def handle_switch_group_random_reply(
             await switch_group_random_reply.finish(f"群 {group_id.result} 随机回复已开启")
         else:
             obj.enabled = not obj.enabled
-            status = "开启" if obj.enabled else "关闭"  # 提前获取
+            status = "开启" if obj.enabled else "关闭"
             await session.commit()
             invalidate_random_reply_cache(str(bot.self_id), str(group_id.result))
             await switch_group_random_reply.finish(f"群 {group_id.result} 随机回复已{status}")

@@ -4,7 +4,7 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from .echo import invalidate_group_cache
+from .cache import invalidate_group_cache
 from .utils import _valid_qq
 from ..command import add_group, del_group
 from ..model.group import Group

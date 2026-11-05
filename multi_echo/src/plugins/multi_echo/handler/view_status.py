@@ -3,7 +3,7 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, Bot
 from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select, delete
 
-from .echo import invalidate_all_goods_cache
+from .cache import invalidate_all_goods_cache
 from ..command import view_status, view_whitelist_group, del_goods_all
 from ..model.goods import Goods
 from ..model.group import Group

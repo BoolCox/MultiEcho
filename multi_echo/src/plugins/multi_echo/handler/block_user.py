@@ -4,7 +4,7 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from .echo import invalidate_block_cache
+from .cache import invalidate_block_cache
 from .utils import _valid_qq
 from ..command import add_blocked_user, del_blocked_user
 from ..model.blocked_user import BlockedUser

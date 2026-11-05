@@ -1,17 +1,11 @@
-from cachetools import TTLCache
 from nonebot import get_driver
 from nonebot.adapters.onebot.v11 import Event
 from nonebot.permission import Permission
 from nonebot_plugin_orm import get_session
 from sqlalchemy import select
 
+from .cache import admin_cache
 from ..model.admin import Admin
-
-admin_cache = TTLCache(maxsize=1024, ttl=300)
-
-
-def invalidate_admin_cache(bot_qq: str, admin_qq: str) -> None:
-    admin_cache.pop(f"{bot_qq}:{admin_qq}", None)
 
 
 def _get_user_id(event: Event) -> str | None:

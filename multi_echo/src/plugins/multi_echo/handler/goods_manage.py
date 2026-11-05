@@ -1,24 +1,73 @@
 from nonebot.adapters.onebot.v11 import Bot
+from nonebot.matcher import Matcher
 from nonebot_plugin_alconna import Match
 from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 
-from .echo import (
-    _normalize_code,
-    invalidate_goods_cache,
-    invalidate_min_price_cache,
-)
+from .cache import invalidate_goods_cache, invalidate_min_price_cache
+from .echo import _normalize_code
 from ..command import (
-    set_goods,
     del_goods,
-    set_onepack_goods,
     del_onepack_goods,
+    del_rand_three_tail_three_pack_goods,
+    set_goods,
     set_min_price,
+    set_onepack_goods,
     set_rand_three_tail_three_pack_goods,
-    del_rand_three_tail_three_pack_goods
 )
 from ..model.goods import Goods
 from ..model.group_fee_rule import GroupFeeRule
+
+
+async def _handle_set_goods_by_type(
+        matcher: type[Matcher],
+        bot: Bot,
+        session: async_scoped_session,
+        entries: Match[tuple[str, ...]],
+        goods_type: str,
+) -> None:
+    if not entries.available:
+        return
+
+    parsed, invalid, duplicated_count = _parse_goods_entries(entries.result)
+    if not parsed:
+        await matcher.finish("未解析到有效的代号-费用上限")
+        return
+
+    await _upsert_goods(session, bot.self_id, parsed, goods_type)
+    await session.commit()
+    for code, _ in parsed:
+        invalidate_goods_cache(str(bot.self_id), goods_type, code)
+
+    if invalid and duplicated_count:
+        await matcher.finish(
+            f"已设置：{len(parsed)} 项，移除重复项：{duplicated_count} 项，以下条目无效：{', '.join(invalid)}"
+        )
+    elif invalid:
+        await matcher.finish(f"已设置：{len(parsed)} 项，以下条目无效：{', '.join(invalid)}")
+    elif duplicated_count:
+        await matcher.finish(f"已设置：{len(parsed)} 项，移除重复项：{duplicated_count} 项")
+    else:
+        await matcher.finish(f"已设置：{len(parsed)} 项")
+
+
+async def _handle_del_goods_by_type(
+        matcher: type[Matcher],
+        bot: Bot,
+        session: async_scoped_session,
+        entries: Match[tuple[str, ...]],
+        goods_type: str,
+) -> None:
+    if not entries.available:
+        return
+
+    deleted = await _delete_goods(session, bot.self_id, entries.result, goods_type)
+    await session.commit()
+    for entry in entries.result:
+        norm = _normalize_code(entry.split("-", 1)[0])
+        if norm:
+            invalidate_goods_cache(str(bot.self_id), goods_type, norm)
+    await matcher.finish(f"已删除：{deleted} 项")
 
 
 @set_goods.handle()
@@ -27,30 +76,7 @@ async def handle_set_goods(
         session: async_scoped_session,
         goods_list: Match[tuple[str, ...]]
 ):
-    if not goods_list.available:
-        return
-
-    parsed, invalid, duplicated_count = _parse_goods_entries(goods_list.result)
-
-    if not parsed:
-        await set_goods.finish("未解析到有效的代号-费用上限")
-        return
-
-    await _upsert_goods(session, bot.self_id, parsed, "normal")
-    await session.commit()
-    for code, _ in parsed:
-        invalidate_goods_cache(str(bot.self_id), "normal", code)
-
-    if invalid and duplicated_count:
-        await set_goods.finish(
-            f"已设置：{len(parsed)} 项，移除重复项：{duplicated_count} 项，以下条目无效：{', '.join(invalid)}"
-        )
-    elif invalid:
-        await set_goods.finish(f"已设置：{len(parsed)} 项，以下条目无效：{', '.join(invalid)}")
-    elif duplicated_count:
-        await set_goods.finish(f"已设置：{len(parsed)} 项，移除重复项：{duplicated_count} 项")
-    else:
-        await set_goods.finish(f"已设置：{len(parsed)} 项")
+    await _handle_set_goods_by_type(set_goods, bot, session, goods_list, "normal")
 
 
 @del_goods.handle()
@@ -59,16 +85,7 @@ async def handle_del_goods(
         session: async_scoped_session,
         goods_list: Match[tuple[str, ...]]
 ):
-    if not goods_list.available:
-        return
-
-    deleted = await _delete_goods(session, bot.self_id, goods_list.result, "normal")
-    await session.commit()
-    for entry in goods_list.result:
-        norm = _normalize_code(entry.split("-", 1)[0])
-        if norm:
-            invalidate_goods_cache(str(bot.self_id), "normal", norm)
-    await del_goods.finish(f"已删除：{deleted} 项")
+    await _handle_del_goods_by_type(del_goods, bot, session, goods_list, "normal")
 
 
 @set_onepack_goods.handle()
@@ -77,29 +94,7 @@ async def handle_set_onepack_goods(
         session: async_scoped_session,
         goods_list: Match[tuple[str, ...]]
 ):
-    if not goods_list.available:
-        return
-
-    parsed, invalid, duplicated_count = _parse_goods_entries(goods_list.result)
-    if not parsed:
-        await set_onepack_goods.finish("未解析到有效的代号-费用上限")
-        return
-
-    await _upsert_goods(session, bot.self_id, parsed, "onepack")
-    await session.commit()
-    for code, _ in parsed:
-        invalidate_goods_cache(str(bot.self_id), "onepack", code)
-
-    if invalid and duplicated_count:
-        await set_goods.finish(
-            f"已设置：{len(parsed)} 项，移除重复项：{duplicated_count} 项，以下条目无效：{', '.join(invalid)}"
-        )
-    elif invalid:
-        await set_goods.finish(f"已设置：{len(parsed)} 项，以下条目无效：{', '.join(invalid)}")
-    elif duplicated_count:
-        await set_goods.finish(f"已设置：{len(parsed)} 项，移除重复项：{duplicated_count} 项")
-    else:
-        await set_goods.finish(f"已设置：{len(parsed)} 项")
+    await _handle_set_goods_by_type(set_onepack_goods, bot, session, goods_list, "onepack")
 
 
 @del_onepack_goods.handle()
@@ -108,16 +103,7 @@ async def handle_del_onepack_goods(
         session: async_scoped_session,
         goods_list: Match[tuple[str, ...]]
 ):
-    if not goods_list.available:
-        return
-
-    deleted = await _delete_goods(session, bot.self_id, goods_list.result, "onepack")
-    await session.commit()
-    for entry in goods_list.result:
-        norm = _normalize_code(entry.split("-", 1)[0])
-        if norm:
-            invalidate_goods_cache(str(bot.self_id), "onepack", norm)
-    await del_onepack_goods.finish(f"已删除：{deleted} 项")
+    await _handle_del_goods_by_type(del_onepack_goods, bot, session, goods_list, "onepack")
 
 
 @set_rand_three_tail_three_pack_goods.handle()
@@ -126,29 +112,9 @@ async def handle_set_rand_three_tail_three_pack_goods(
         session: async_scoped_session,
         goods_range: Match[tuple[str, ...]]
 ):
-    if not goods_range.available:
-        return
-    parsed, invalid, duplicated_count = _parse_goods_entries(goods_range.result)
-
-    if not parsed:
-        await set_rand_three_tail_three_pack_goods.finish("未解析到有效的代号-费用上限")
-        return
-
-    await _upsert_goods(session, bot.self_id, parsed, "rand_three_tail_three_pack")
-    await session.commit()
-    for code, _ in parsed:
-        invalidate_goods_cache(str(bot.self_id), "rand_three_tail_three_pack", code)
-
-    if invalid and duplicated_count:
-        await set_goods.finish(
-            f"已设置：{len(parsed)} 项，移除重复项：{duplicated_count} 项，以下条目无效：{', '.join(invalid)}"
-        )
-    elif invalid:
-        await set_goods.finish(f"已设置：{len(parsed)} 项，以下条目无效：{', '.join(invalid)}")
-    elif duplicated_count:
-        await set_goods.finish(f"已设置：{len(parsed)} 项，移除重复项：{duplicated_count} 项")
-    else:
-        await set_goods.finish(f"已设置：{len(parsed)} 项")
+    await _handle_set_goods_by_type(
+        set_rand_three_tail_three_pack_goods, bot, session, goods_range, "rand_three_tail_three_pack"
+    )
 
 
 @del_rand_three_tail_three_pack_goods.handle()
@@ -157,15 +123,9 @@ async def handle_del_rand_three_tail_three_pack_goods(
         session: async_scoped_session,
         goods_range: Match[tuple[str, ...]]
 ):
-    if not goods_range.available:
-        return
-    deleted = await _delete_goods(session, bot.self_id, goods_range.result, "rand_three_tail_three_pack")
-    await session.commit()
-    for entry in goods_range.result:
-        norm = _normalize_code(entry.split("-", 1)[0])
-        if norm:
-            invalidate_goods_cache(str(bot.self_id), "rand_three_tail_three_pack", norm)
-    await del_rand_three_tail_three_pack_goods.finish(f"已删除：{deleted} 项")
+    await _handle_del_goods_by_type(
+        del_rand_three_tail_three_pack_goods, bot, session, goods_range, "rand_three_tail_three_pack"
+    )
 
 
 @set_min_price.handle()
@@ -201,7 +161,6 @@ async def handle_set_min_price(
 
 
 def _parse_goods_entries(entries: tuple[str, ...]) -> tuple[list[tuple[str, int]], list[str], int]:
-    # 格式化解析
     parsed: list[tuple[str, int]] = []
     invalid: list[str] = []
     for entry in entries:
@@ -216,7 +175,6 @@ def _parse_goods_entries(entries: tuple[str, ...]) -> tuple[list[tuple[str, int]
             continue
         parsed.append((code, int(limit)))
 
-    # 归一化处理
     normalized: list[tuple[str, int]] = []
     seen_codes: set[str] = set()
     duplicated_count = 0
@@ -279,7 +237,7 @@ async def _delete_goods(
 ) -> int:
     deleted = 0
     for entry in entries:
-        code = entry.split("-", 1)[0].strip()
+        code = _normalize_code(entry.split("-", 1)[0])
         if not code:
             continue
         result = await session.execute(

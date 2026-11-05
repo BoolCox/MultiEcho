@@ -4,7 +4,7 @@ from nonebot_plugin_orm import async_scoped_session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from .permission import invalidate_admin_cache
+from .cache import invalidate_admin_cache
 from .utils import _valid_qq
 from ..command import add_admin, del_admin
 from ..model.admin import Admin
