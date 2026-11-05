@@ -5,6 +5,7 @@ import re
 from cachetools import TTLCache
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
 from nonebot.adapters.onebot.v11.bot import Bot
+from nonebot.log import logger
 from nonebot.matcher import Matcher
 from nonebot_plugin_orm import get_session
 from sqlalchemy import select
@@ -101,7 +102,16 @@ async def handler_echo(bot: Bot, event: GroupMessageEvent, matcher: Matcher):
         # 设置前缀
         prefix = _build_random_prefix(group)
 
-    except (SQLAlchemyError, ReplyFeeExc):
+    except ReplyFeeExc as exc:
+        logger.info(
+            f"[echo] 未回复 group={event.group_id} bot={bot.self_id} "
+            f"user={event.get_user_id()} reason={exc.message or exc}"
+        )
+        return
+    except SQLAlchemyError:
+        logger.exception(
+            f"[echo] 数据库异常，未回复 group={event.group_id} bot={bot.self_id}"
+        )
         return
 
     await echo.send(

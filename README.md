@@ -84,10 +84,10 @@ MultiEcho/
 
 1. 安装 [uv](https://github.com/astral-sh/uv)（Python 包管理器）。
 2. 将 `nonebot/.env.multi_echo_candy.example` 重命名为 `nonebot/.env.multi_echo_candy`。
-3. 打开 `nonebot/.env.multi_echo_candy`，将 `SUPERUSER` 设置为你的 QQ 号：
+3. 打开 `nonebot/.env.multi_echo_candy`，将 `SUPERUSERS` 设置为你（以及需要一起管理的人）的 QQ 号，可填多个，用英文逗号分隔：
 
    ```
-   SUPERUSER="123456789"
+   SUPERUSERS=["123456789", "987654321"]
    ```
 
 ### 3. 启动程序

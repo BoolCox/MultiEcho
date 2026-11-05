@@ -1,14 +1,11 @@
 from cachetools import TTLCache
-from nonebot import get_plugin_config
+from nonebot import get_driver
 from nonebot.adapters.onebot.v11 import Event
 from nonebot.permission import Permission
 from nonebot_plugin_orm import get_session
 from sqlalchemy import select
 
-from ..config import EchoConfig
 from ..model.admin import Admin
-
-config = get_plugin_config(EchoConfig)
 
 admin_cache = TTLCache(maxsize=1024, ttl=300)
 
@@ -31,9 +28,9 @@ def is_self(event: Event) -> bool:
 
 
 async def is_super_admin(event: Event) -> bool:
-    """仅配置文件的超级管理员（不包含机器人自身和普通主人）"""
+    """NoneBot 配置 `SUPERUSERS` 中的超级管理员（不包含机器人自身和普通主人）"""
     user_id = _get_user_id(event)
-    return user_id is not None and user_id == str(config.superuser)
+    return user_id is not None and user_id in get_driver().config.superusers
 
 
 async def is_admin(event: Event) -> bool:
@@ -62,7 +59,7 @@ async def is_admin(event: Event) -> bool:
 
 
 async def is_super_admin_or_self(event: Event) -> bool:
-    """配置文件的管理员和机器人自身都属于超级管理员"""
+    """`SUPERUSERS` 中的超管和机器人自身都属于超级管理员"""
     return await is_super_admin(event) or is_self(event)
 
 

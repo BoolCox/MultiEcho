@@ -59,7 +59,7 @@ del_blocked_user = on_alconna(
     block=True
 )
 
-# 3. 商品管理（仅配置文件的超级管理员 SUPERUSER 可操作，机器人自身和主人均不可操作）
+# 3. 商品管理（仅配置文件的超级管理员 SUPERUSERS 可操作，机器人自身和主人均不可操作）
 set_goods = on_alconna(
     Alconna(
         "设置压车数",
