@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Launcher.Services;
@@ -45,16 +46,31 @@ internal sealed partial class NonebotManager(Job job)
             Console.WriteLine("[nonebot] uv sync completed");
         }
 
+        var nbExe = Path.Combine(nonebotDir, ".venv", "Scripts", "nb.exe");
+        if (!File.Exists(nbExe))
+        {
+            Console.WriteLine("[nonebot] nb.exe not found in .venv\\Scripts");
+            _status = "Failed";
+            return;
+        }
+
         var psi = new ProcessStartInfo
         {
-            FileName = "powershell.exe",
-            Arguments = "-NoProfile -ExecutionPolicy Bypass -Command \"& .\\.venv\\Scripts\\activate.ps1; .\\.venv\\Scripts\\nb.exe run --reload\"",
+            FileName = nbExe,
+            Arguments = "run --reload",
             WorkingDirectory = nonebotDir,
-            UseShellExecute = false,
+
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            RedirectStandardInput = true,
-            CreateNoWindow = true
+
+            StandardInputEncoding = new UTF8Encoding(false),
+            StandardOutputEncoding = new UTF8Encoding(false),
+            StandardErrorEncoding = new UTF8Encoding(false),
+
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            Environment = { ["PYTHONUTF8"] = "1" }
         };
 
         try

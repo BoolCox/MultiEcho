@@ -7,17 +7,34 @@ namespace Launcher.Services;
 
 internal sealed partial class NapCatManager(Job job)
 {
-    private readonly List<NapCatInstance> _instances = [];
+    private const int BaseWebUiPort = 6099;
+    private static readonly TimeSpan s_launchInterval = TimeSpan.FromSeconds(2);
+
+    // 整体替换数组，避免 UI/轮询线程遍历时集合被并发修改
+    private volatile NapCatInstance[] _instances = [];
     private readonly ConcurrentQueue<string> _pendingUrls = new();
 
     public IReadOnlyList<NapCatInstance> Instances => _instances;
 
+    public async Task LaunchAllAsync(string[] dirs, CancellationToken cancellationToken = default)
+    {
+        for (var i = 0; i < dirs.Length; i++)
+        {
+            if (i > 0)
+                await Task.Delay(s_launchInterval, cancellationToken);
+
+            // 为每个实例分配独立的 WebUI 端口，避免并发启动时抢占同一端口
+            if (Launch(dirs[i], BaseWebUiPort + i) is { } inst)
+                _instances = [.. _instances, inst];
+        }
+    }
+
     public void LaunchAll(string[] dirs)
     {
-        foreach (var dir in dirs)
+        for (var i = 0; i < dirs.Length; i++)
         {
-            if (Launch(dir) is { } inst)
-                _instances.Add(inst);
+            if (Launch(dirs[i], BaseWebUiPort + i) is { } inst)
+                _instances = [.. _instances, inst];
         }
     }
 
@@ -30,7 +47,7 @@ internal sealed partial class NapCatManager(Job job)
         }
     }
 
-    private NapCatInstance? Launch(string napcatDir)
+    private NapCatInstance? Launch(string napcatDir, int webUiPort)
     {
         var name = Path.GetFileName(napcatDir);
         var launcher = Path.Combine(napcatDir, "launcher.bat");
@@ -50,7 +67,11 @@ internal sealed partial class NapCatManager(Job job)
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            Environment = { ["NO_COLOR"] = "1" }
+            Environment =
+            {
+                ["NO_COLOR"] = "1",
+                ["NAPCAT_WEBUI_PREFERRED_PORT"] = webUiPort.ToString()
+            }
         };
 
         var instance = new NapCatInstance(name);
@@ -65,7 +86,7 @@ internal sealed partial class NapCatManager(Job job)
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
             instance.Process = proc;
-            Console.WriteLine($"[{name}] started (PID {proc.Id})");
+            Console.WriteLine($"[{name}] started (PID {proc.Id}, preferred WebUI port {webUiPort})");
             return instance;
         }
         catch (Exception ex)

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
@@ -8,6 +8,7 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<ApplicationIcon>app.ico</ApplicationIcon>
+		<Version>1.1.0</Version>
 	</PropertyGroup>
 
 	<!-- 发布配置 -->
@@ -37,57 +38,44 @@
 
 	<!-- 复制 nonebot 到 build/nonebot -->
 	<Target Name="CopyNonebot" AfterTargets="Publish" DependsOnTargets="CopyLauncherFiles">
-		<Exec Command="robocopy &quot;$(RootDir)multi_echo&quot; &quot;$(OutputDir)nonebot&quot; /E /XD .venv __pycache__ .idea .jbeval .vscode data /XF multi_echo.db .env.multi_echo .env.multi_echo_candy" IgnoreExitCode="true" />
+		<Exec Command="robocopy &quot;$(RootDir)multi_echo&quot; &quot;$(OutputDir)nonebot&quot; /E /XD .venv __pycache__ .idea .jbeval .vscode data /XF multi_echo.db multi_echo_candy.db .env.multi_echo .env.multi_echo_candy" IgnoreExitCode="true" />
 		<Copy SourceFiles="$(RootDir)README.md" DestinationFolder="$(OutputDir)" />
 	</Target>
 
 	<!-- 下载并解压 NapCat 到 build/napcat1 -->
 	<Target Name="DownloadNapCat" AfterTargets="Publish" DependsOnTargets="CopyNonebot">
 		<PropertyGroup>
-			<NapcatVersion>v4.16.0</NapcatVersion>
+			<NapcatVersion>v4.18.28</NapcatVersion>
 			<NapcatUrl>https://github.com/NapNeko/NapCatQQ/releases/download/$(NapcatVersion)/NapCat.Shell.zip</NapcatUrl>
 			<NapcatZip>$(OutputDir)NapCat.zip</NapcatZip>
 			<NapcatExtractDir>$(OutputDir)napcat1</NapcatExtractDir>
 		</PropertyGroup>
-		<Exec Command='powershell -Command "Invoke-WebRequest -Uri $(NapcatUrl) -OutFile &quot;$(NapcatZip)&quot;"' />
-		<Exec Command='powershell -Command "Expand-Archive -Path &quot;$(NapcatZip)&quot; -DestinationPath &quot;$(NapcatExtractDir)&quot; -Force"' />
+		<DownloadFile SourceUrl="$(NapcatUrl)" DestinationFolder="$(OutputDir)" DestinationFileName="NapCat.zip" Retries="3" RetryDelayMilliseconds="1000" />
+		<Unzip SourceFiles="$(NapcatZip)" DestinationFolder="$(NapcatExtractDir)" OverwriteReadOnlyFiles="true" />
 		<Delete Files="$(NapcatZip)" />
 	</Target>
 
 	<!-- 在 NapCat 的 config 目录中创建 onebot11.json 配置文件 -->
 	<Target Name="CreateNapCatConfig" AfterTargets="Publish" DependsOnTargets="DownloadNapCat">
 		<PropertyGroup>
-			<NapcatConfigDir>$(OutputDir)napcat1\config\</NapcatConfigDir>
-			<Onebot11Json>
-{
-  "network": {
-    "httpServers": [],
-    "httpSseServers": [],
-    "httpClients": [],
-    "websocketServers": [],
-    "websocketClients": [
-      {
-        "enable": true,
-        "name": "MultiEcho",
-        "url": "ws://localhost:8081/onebot/v11/ws",
-        "reportSelfMessage": true,
-        "messagePostFormat": "array",
-        "token": ".gJodsBWEwHaaKc0",
-        "debug": false,
-        "heartInterval": 30000,
-        "reconnectInterval": 5000
-      }
-    ],
-    "plugins": []
-  },
-  "musicSignUrl": "",
-  "enableLocalFile2Url": false,
-  "parseMultMsg": false,
-  "imageDownloadProxy": ""
-}
-			</Onebot11Json>
+			<NapcatConfigDir>$(OutputDir)napcat1\config</NapcatConfigDir>
 		</PropertyGroup>
 		<MakeDir Directories="$(NapcatConfigDir)" />
-		<WriteLinesToFile File="$(NapcatConfigDir)onebot11.json" Lines="$(Onebot11Json)" Overwrite="true" />
+		<Copy SourceFiles="$(MSBuildProjectDirectory)\onebot11.json" DestinationFiles="$(NapcatConfigDir)\onebot11.json" SkipUnchangedFiles="true" />
+	</Target>
+
+	<!-- 压缩 build 目录并打开文件夹 -->
+	<Target Name="ZipAndOpen" AfterTargets="CreateNapCatConfig">
+		<PropertyGroup>
+			<ZipVersion Condition="'$(Version)' != ''">$(Version)</ZipVersion>
+			<ZipFileName>$(AssemblyName)-$(ZipVersion)-$(RuntimeIdentifier).zip</ZipFileName>
+			<TempZipFilePath>$(RootDir)$(ZipFileName)</TempZipFilePath>
+			<ZipFilePath>$(OutputDir)$(ZipFileName)</ZipFilePath>
+		</PropertyGroup>
+		<Message Text="Creating zip: $(ZipFilePath)" Importance="high" />
+		<ZipDirectory SourceDirectory="$(OutputDir)" DestinationFile="$(TempZipFilePath)" Overwrite="true" />
+		<Move SourceFiles="$(TempZipFilePath)" DestinationFiles="$(ZipFilePath)" OverwriteReadOnlyFiles="true" />
+		<Message Text="Opening folder: $(OutputDir)" Importance="high" />
+		<Exec Command="explorer &quot;$(OutputDir)&quot;" IgnoreExitCode="true" />
 	</Target>
 </Project>

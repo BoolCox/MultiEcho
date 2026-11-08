@@ -41,7 +41,7 @@ async def handler_unfollow_user(
         bot_id = str(event.self_id)
         user_id = _valid_qq(str(qq.result))
     except ValueError:
-        await follow_user.finish("QQ号不合法")
+        await unfollow_user.finish("QQ号不合法")
         return
 
     try:
