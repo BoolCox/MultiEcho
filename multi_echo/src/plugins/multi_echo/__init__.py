@@ -5,7 +5,6 @@ from nonebot_plugin_alconna.builtins.extensions.onebot11 import MessageSentExten
 
 from . import handler
 from . import model
-from .config import EchoConfig
 
 require("nonebot_plugin_orm")
 require("nonebot_plugin_alconna")
@@ -15,5 +14,4 @@ __plugin_meta__ = PluginMetadata(
     name="multi_echo",
     description="用多个账号复读指定用户的消息",
     usage="",
-    config=EchoConfig,
 )
